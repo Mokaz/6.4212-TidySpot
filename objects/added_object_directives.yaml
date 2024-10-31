@@ -1,0 +1,7 @@
+directives:
+- add_model:
+    name: book
+    file: package://manipulation/book.sdf
+    default_free_body_pose:
+        book:
+            translation: [0.65, 0, 2] # TODO: ramdomize object and drop position
