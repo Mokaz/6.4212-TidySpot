@@ -1,0 +1,54 @@
+channels:
+  - pytorch
+  - pytorch3d
+  - nvidia
+  - conda-forge
+  - pyg
+dependencies:
+  - python==3.9.*
+  - cmake
+  - ipython
+  - pybind11
+  - pytorch
+  - pytorch-cuda=11.8
+  - pytorch3d
+  - torchvision
+  - torchaudio
+  - pyg
+  - ninja
+  - pytorch-cluster
+  - pytorch-scatter
+  - setuptools=59.6.0  # Compatible with `numpy.distutils`
+  - pip
+  - pip:
+      - numpy=1.21
+      - scipy==1.10.1
+      - sentencepiece==0.1.99 
+      - hydra-core
+      - pandas==2.0.3
+      # Robots
+      - opencv-python
+      # Neural networks
+      - openai-clip
+      - timm
+      # Visualizations and debugging
+      - matplotlib==3.7.2
+      # Command line tools
+      - imageio
+      - open3d
+      - numpy-quaternion
+      # Navigation
+      - more-itertools
+      - pyliblzfse
+      - einops
+      - transformers
+      - sentence-transformers
+      - pytorch-lightning
+      - wget
+      - gdown
+      - torch_geometric
+      - tqdm
+      - zmq
+      # grasping dependencies
+      - protobuf==3.19.0
+
