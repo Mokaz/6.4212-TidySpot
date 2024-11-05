@@ -1,4 +1,4 @@
-# TidySpot: Autonomous Room Cleaning with Boston Dynamics’ Spot
+# TidySpot
 
 ## Overview
 
