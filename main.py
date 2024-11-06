@@ -17,19 +17,10 @@ from pydrake.all import (
 from manipulation import ConfigureParser, FindResource, running_as_notebook
 from manipulation.station import AppendDirectives, LoadScenario, MakeHardwareStation
 
+from utils import export_diagram_as_svg
+
 import os
 import numpy as np
-from typing import BinaryIO, Optional, Union, Tuple
-import numpy.typing as npt
-import pydot
-
-def export_diagram_as_svg(diagram: Diagram, file: Union[BinaryIO, str]) -> None:
-    if type(file) is str:
-        file = open(file, "bw")
-    graphviz_str = diagram.GetGraphvizString()
-    svg_data = pydot.graph_from_dot_data(
-        diagram.GetGraphvizString())[0].create_svg()
-    file.write(svg_data)
 
 ### Start the visualizer ###
 meshcat = StartMeshcat()
