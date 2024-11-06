@@ -26,6 +26,7 @@ In the Drake simulation, the objects will be of unknown types, and the room may 
    cd ~
    git clone https://github.com/NVIDIA/MinkowskiEngine.git
    cd MinkowskiEngine
+   export MAX_JOBS=2;
    python setup.py install --blas_include_dirs=${CONDA_PREFIX}/include --blas=openblas
 3. Clone the AnyGrasp repository and follow install instructions
 4. Get license and download checkpoints
