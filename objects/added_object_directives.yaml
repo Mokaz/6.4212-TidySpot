@@ -1,7 +1,13 @@
 directives:
 - add_model:
+    name: table_top
+    file: package://TidySpot_objects/table_top.sdf
+- add_weld:
+    parent: world
+    child: table_top::table_top_center
+- add_model:
     name: book
     file: package://manipulation/book.sdf
     default_free_body_pose:
         book:
-            translation: [0.65, 0, 2] # TODO: ramdomize object and drop position
+            translation: [1, 0, 2] # TODO: ramdomize object and drop position

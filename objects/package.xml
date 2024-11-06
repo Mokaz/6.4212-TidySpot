@@ -1,0 +1,11 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>TidySpot_objects</name>
+  <version>0.0.0</version>
+  <description>
+    dummy project?
+  </description>
+  <maintainer email="ballweg@mit.edu">Robin Ballweg</maintainer>
+  <author>Robin Ballweg</author>
+  <license>N/A</license>
+</package>
