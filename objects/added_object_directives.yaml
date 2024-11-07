@@ -6,8 +6,40 @@ directives:
     parent: world
     child: table_top::table_top_center
 - add_model:
-    name: book
+    name: book1
     file: package://manipulation/book.sdf
     default_free_body_pose:
         book:
-            translation: [1, 0, 2] # TODO: ramdomize object and drop position
+            translation: [1, 0, 1]
+- add_model:
+    name: book2
+    file: package://manipulation/book.sdf
+    default_free_body_pose:
+        book:
+            translation: [2, 0, 0.1]
+- add_model:
+    name: book3
+    file: package://manipulation/book.sdf
+    default_free_body_pose:
+        book:
+            translation: [-1, -1, 0.1]
+- add_model:
+    name: book4
+    file: package://manipulation/book.sdf
+    default_free_body_pose:
+        book:
+            translation: [1, 0, 0.1]
+- add_model:
+    name: planar_bin
+    file: package://TidySpot_objects/bin.sdf
+    default_free_body_pose:
+        bin_base:
+            translation: [0, 1, 0.1]
+- add_model:
+    name: table
+    file: package://TidySpot_objects/table.sdf
+    default_free_body_pose:
+        table_body_link:
+            translation: [1, 0, 0.1]
+            rotation: !Rpy { deg: [90, 0, 0]}
+            
