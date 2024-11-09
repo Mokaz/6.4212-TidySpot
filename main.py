@@ -48,7 +48,55 @@ for camera_name, camera_config in scenario.cameras.items():
         image_size = (camera_config.width, camera_config.height)
 
 ### Add objects to scene ###
-scenario = AppendDirectives(scenario, filename="objects/added_object_directives.yaml")
+from typing import Tuple
+import random
+
+def clutter_gen(num_items:int, spawn_area: Tuple[float, float], scene_file: str, goal_file: str):
+    ycb = ["003_cracker_box.sdf", "004_sugar_box.sdf", "005_tomato_soup_can.sdf", 
+        "006_mustard_bottle.sdf", "009_gelatin_box.sdf", "010_potted_meat_can.sdf"]
+    ycb_bases = ["base_link_cracker", "base_link_sugar", "base_link_soup", 
+        "base_link_mustard", "base_link_gelatin", "base_link_meat"]
+    
+    # Step 0: Check if we are in right directory
+    current_directory = os.getcwd()
+    if not current_directory.endswith("6.4212_TidySpot"):
+        scene_path = os.path.join("6.4212_TidySpot", scene_file)
+        goal_path = os.path.join("6.4212_TidySpot", goal_file)
+    else: 
+        scene_path = scene_file
+        goal_path = goal_file
+
+    # Step 1: Read the original YAML file
+    try:
+        with open(scene_path, 'r') as file:
+            yaml_content = file.read()
+    except FileNotFoundError:
+        print(f"Error: The file {scene_path} was not found.")
+        return
+
+    # Step 2: Add the area tuple to the YAML content
+    rng = random.Random()  # Initialize a random generator
+    for i in range(num_items):
+        object_num = rng.randint(0, len(ycb)-1)
+        x_pos = rng.uniform(-spawn_area[0],spawn_area[0])
+        y_pos = rng.uniform(-spawn_area[1],spawn_area[1])
+        yaml_content += f"""
+- add_model:
+    name: thing{i}
+    file: package://manipulation/hydro/{ycb[object_num]}
+    default_free_body_pose:
+        {ycb_bases[object_num]}:
+            translation: [{x_pos}, {y_pos}, 2]"""
+
+    # Step 3: Write the modified content to the goal file
+    with open(goal_path, 'w') as file:
+        file.write(yaml_content)
+    print(f"File saved to {goal_path}")
+
+    return goal_file
+
+clutter_file = clutter_gen(4, (3.0, 3.0), "objects/added_object_directives.yaml", "objects/modified_object_directives.yaml")
+scenario = AppendDirectives(scenario, filename=clutter_file)
 
 station = builder.AddSystem(MakeHardwareStation(
     scenario=scenario,
@@ -114,7 +162,3 @@ meshcat.PublishRecording()
 # Keep meshcat alive
 while not meshcat.GetButtonClicks("Stop meshcat"):
     pass
-
-
-
-
