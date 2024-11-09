@@ -17,10 +17,11 @@ In the Drake simulation, the objects will be of unknown types, and the room may 
    [Download Conda](https://docs.anaconda.com/anaconda/install/linux/) and follow the installation instructions for your OS.
 
 ### Environment Setup
-1. Create and activate the Conda environment:
+1. Create and activate the Conda environment (may have issues with GraspnetAPI, install it without dependencies):
    ```bash
-   conda env create -n tidyspot-env -f ./env-cu118-tidyspot.yml
+   conda env create -n tidyspot-env -f ./tidyspot-conda-environment.yml
    conda activate tidyspot-env
+   ```
 2. Clone and install the MinkowskiEngine:
    ```bash
    cd ~
@@ -28,5 +29,6 @@ In the Drake simulation, the objects will be of unknown types, and the room may 
    cd MinkowskiEngine
    export MAX_JOBS=2;
    python setup.py install --blas_include_dirs=${CONDA_PREFIX}/include --blas=openblas
+   ```
 3. Clone the AnyGrasp repository and follow install instructions
 4. Get license and download checkpoints
