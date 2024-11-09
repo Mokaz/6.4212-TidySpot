@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<sdf version="1.7">
+
+  <model name="ground_plane">
+  <link name="ground_plane_link">
+    <inertial>
+      <mass>18.70</mass>
+      <pose>0.0 0.0 0.445 0 0 0</pose>
+      <inertia>
+          <ixx>0.619</ixx>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyy>0.374</iyy>
+          <iyz>0</iyz>
+          <izz>0.99</izz>
+      </inertia>
+    </inertial>
+    <visual name="bottom">
+      <pose>0.0 0.0 0.445 0 0 0</pose>
+      <geometry>
+        <box>
+          <size>10.0 10.0 0.015</size>.
+        </box>
+      </geometry>
+      <material>
+        <diffuse>0.9 0.9 0.9 1.0</diffuse>
+      </material>
+    </visual>
+    <collision name="bottom">
+      <pose>0.0 0.0 0.445 0 0 0</pose>
+      <geometry>
+        <box>
+          <size>10.0 10.0 0.015</size>
+        </box>
+      </geometry>
+      <drake:proximity_properties>
+        <drake:compliant_hydroelastic/>
+        <drake:hydroelastic_modulus>1.0e6</drake:hydroelastic_modulus>
+      </drake:proximity_properties>
+    </collision>
+  </link>
+  <frame name="ground_plane_center">
+    <pose relative_to="ground_plane_link">0 0 0.47 0 0 0</pose>
+  </frame>
+</model>
+
+</sdf>
+

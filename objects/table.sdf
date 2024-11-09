@@ -4,21 +4,21 @@
       <pose>0 0 0 0 0 0</pose>
       <inertial>
         <mass>10</mass>
-        <pose>-0.01263 0.32351 -0.16075 0 0 0</pose>
+        <pose>0.00000 0.86564 -0.00000 0 0 0</pose>
         <inertia>
-          <ixx>1.50660e+00</ixx>
-          <ixy>-6.64182e-04</ixy>
-          <ixz>-1.12192e-04</ixz>
-          <iyy>1.75825e+00</iyy>
-          <iyz>1.17344e-03</iyz>
-          <izz>3.80837e-01</izz>
+          <ixx>1.05744e+00</ixx>
+          <ixy>9.83205e-11</ixy>
+          <ixz>-9.55193e-11</ixz>
+          <iyy>6.07674e+00</iyy>
+          <iyz>4.32032e-11</iyz>
+          <izz>5.31896e+00</izz>
         </inertia>
       </inertial>
       <visual name="visual">
         <geometry>
           <mesh>
             <uri>table.obj</uri>
-            <scale>0.01 0.01 0.01</scale>
+            <scale>0.0035 0.0035 0.0035</scale>
           </mesh>
         </geometry>
       </visual>

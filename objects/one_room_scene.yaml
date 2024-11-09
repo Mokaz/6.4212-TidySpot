@@ -1,0 +1,35 @@
+directives:
+- add_model:
+    name: ground_plane
+    file: package://TidySpot_objects/ground_plane.sdf
+- add_weld:
+    parent: world
+    child: ground_plane::ground_plane_center
+- add_model:
+    name: planar_bin
+    file: package://TidySpot_objects/bin.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: planar_bin::bin_base
+    X_PC:
+        translation: [0, 1.5, 0.1]
+- add_model:
+    name: table
+    file: package://TidySpot_objects/table.sdf
+    default_free_body_pose:
+        table_body_link:
+            translation: [4.5, 3, 0.1]
+            rotation: !Rpy { deg: [90, 0, 90]}
+- add_model:
+    name: book_on_desk
+    file: package://manipulation/book.sdf
+    default_free_body_pose:
+        book:
+            translation: [book_on_desk, 2]
+- add_model:
+    name: book_under_desk
+    file: package://manipulation/book.sdf
+    default_free_body_pose:
+        book:
+            translation: [book_on_desk, 0.1]
+            

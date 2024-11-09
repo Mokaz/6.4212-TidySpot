@@ -6,30 +6,6 @@ directives:
     parent: world
     child: ground_plane::ground_plane_center
 - add_model:
-    name: book1
-    file: package://manipulation/book.sdf
-    default_free_body_pose:
-        book:
-            translation: [1.5, 0, 2]
-- add_model:
-    name: book2
-    file: package://manipulation/book.sdf
-    default_free_body_pose:
-        book:
-            translation: [2, 0, 0.1]
-- add_model:
-    name: book3
-    file: package://manipulation/book.sdf
-    default_free_body_pose:
-        book:
-            translation: [-1, -1, 0.1]
-- add_model:
-    name: book4
-    file: package://manipulation/book.sdf
-    default_free_body_pose:
-        book:
-            translation: [1.5, 0, 0.1]
-- add_model:
     name: planar_bin
     file: package://TidySpot_objects/bin.sdf
 - add_weld:
