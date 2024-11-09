@@ -62,21 +62,21 @@ class CameraHubSystem(LeafSystem):
             builder.Connect(station.GetOutputPort(f"{camera_name}.label_image"), label_input)
 
     def get_color_image(self, camera_name: str, camera_hub_context: Context):
-        return self._camera_color_inputs[camera_name].Eval(camera_hub_context).data
+        return self._camera_color_inputs[camera_name].Eval(camera_hub_context)
 
     def get_depth_image(self, camera_name: str, camera_hub_context: Context):
-        return self._camera_depth_inputs[camera_name].Eval(camera_hub_context).data
+        return self._camera_depth_inputs[camera_name].Eval(camera_hub_context)
 
     def get_label_image(self, camera_name: str, camera_hub_context: Context):
-        return self._camera_label_inputs[camera_name].Eval(camera_hub_context).data
+        return self._camera_label_inputs[camera_name].Eval(camera_hub_context)
 
     def display_all_camera_images(self, camera_hub_context: Context):
         fig, axes = plt.subplots(len(self._camera_names), 3, figsize=(15, 5 * len(self._camera_names)))
 
         for i, camera_name in enumerate(self._camera_names):
-            color_img = self.get_color_image(camera_name, camera_hub_context)
-            depth_img = self.get_depth_image(camera_name, camera_hub_context)
-            label_img = self.get_label_image(camera_name, camera_hub_context)
+            color_img = self.get_color_image(camera_name, camera_hub_context).data
+            depth_img = self.get_depth_image(camera_name, camera_hub_context).data
+            label_img = self.get_label_image(camera_name, camera_hub_context).data
 
             # Plot the color image.
             axes[i, 0].imshow(color_img)
