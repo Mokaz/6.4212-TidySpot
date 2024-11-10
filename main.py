@@ -69,6 +69,7 @@ plant = station.GetSubsystemByName("plant")
 camera_hub = builder.AddSystem(CameraHubSystem(station, camera_names, image_size))
 camera_hub.set_name("camera_hub")
 camera_hub.connect_cameras(station, builder)
+camera_hub.connect_point_clouds(to_point_cloud, builder)
 
 # Add controller = InverseDynamicsController?
 
