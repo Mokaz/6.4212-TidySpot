@@ -16,15 +16,32 @@ from utils import export_diagram_as_svg, DrakeWarningFilter
 from perception import CameraHubSystem
 
 import os
+import sys
+import torch
 import logging
 import numpy as np
 import open3d as o3d
 from PIL import Image
 from matplotlib import pyplot as plt
 
+torch.cuda.empty_cache()
+
 ### Filter out Drake warnings ###
 logger = logging.getLogger('drake')
 logger.addFilter(DrakeWarningFilter())
+
+use_anygrasp = True
+
+### Add anygrasp_sdk to the path ###
+anygrasp_path = os.path.join(os.getcwd(), 'anygrasp_sdk')
+if os.path.exists(anygrasp_path):
+    sys.path.extend([
+        os.path.join(anygrasp_path, 'grasp_detection'),
+        os.path.join(anygrasp_path, 'grasp_detection', 'checkpoints'),
+    ])
+else:
+    print("'anygrasp_sdk' not found.")
+    use_anygrasp = False
 
 ### Start the visualizer ###
 meshcat = StartMeshcat()
@@ -104,16 +121,12 @@ simulator.AdvanceTo(2.0)
 ################
 
 # Display all camera images 
-# camera_hub.display_all_camera_images(camera_hub_context) 
+camera_hub.display_all_camera_images(camera_hub_context) 
 
 # Display single image
 # color_image = camera_hub.get_color_image("frontleft", camera_hub_context).data # Get color image from frontleft camera
 # plt.imshow(color_image)
 # plt.show()
-
-import sys
-sys.path.append(os.getcwd() + '/anygrasp_sdk/grasp_detection')
-sys.path.append(os.getcwd() + '/anygrasp_sdk/grasp_detection/log')
 
 # Get the context for the camera_hub system
 camera_hub_context = camera_hub.GetMyContextFromRoot(simulator.get_context())
@@ -237,60 +250,59 @@ axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=axis_length, origi
 
 ### Anygrasp ###
 
-# import torch
-# torch.cuda.empty_cache()
 
-# from anygrasp_sdk.grasp_detection.gsnet import AnyGrasp
 
-# # Define configuration
-# import argparse
-# parser = argparse.ArgumentParser()
-# parser.add_argument('--checkpoint_path', default=f'{os.getcwd()}/anygrasp_sdk/grasp_detection/log/checkpoint_detection.tar', help='Model checkpoint path')
-# parser.add_argument('--max_gripper_width', type=float, default=0.1, help='Maximum gripper width (<=0.1m)')
-# parser.add_argument('--gripper_height', type=float, default=0.03, help='Gripper height')
-# parser.add_argument('--top_down_grasp', action='store_true', help='Output top-down grasps.')
-# parser.add_argument('--debug', action='store_true', help='Enable debug mode')
-# cfgs = parser.parse_args(args=[])
+from anygrasp_sdk.grasp_detection.gsnet import AnyGrasp
 
-# # Initialize AnyGrasp
-# anygrasp = AnyGrasp(cfgs)
-# anygrasp.load_net()
+# Define configuration
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument('--checkpoint_path', default=os.path.join(anygrasp_path, 'grasp_detection', 'checkpoints', 'checkpoint_detection.tar'), help='Model checkpoint path')
+parser.add_argument('--max_gripper_width', type=float, default=0.1, help='Maximum gripper width (<=0.1m)')
+parser.add_argument('--gripper_height', type=float, default=0.03, help='Gripper height')
+parser.add_argument('--top_down_grasp', action='store_true', help='Output top-down grasps.')
+parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+cfgs = parser.parse_args(args=[])
+
+# Initialize AnyGrasp
+anygrasp = AnyGrasp(cfgs)
+anygrasp.load_net()
+
+# Define workspace limits (adjust as needed)
+# lims = [-np.inf, np.inf, -np.inf, np.inf, -np.inf, np.inf]
 
 # # Define workspace limits (adjust as needed)
-# # lims = [-np.inf, np.inf, -np.inf, np.inf, -np.inf, np.inf]
+# xmin, xmax = -10.0, 10.0
+# ymin, ymax = 10.0, 10.0
+# zmin, zmax = 10.0, 10.0
+# lims = [xmin, xmax, ymin, ymax, zmin, zmax]
 
-# # # Define workspace limits (adjust as needed)
-# # xmin, xmax = -10.0, 10.0
-# # ymin, ymax = 10.0, 10.0
-# # zmin, zmax = 10.0, 10.0
-# # lims = [xmin, xmax, ymin, ymax, zmin, zmax]
+# Run grasp detection
+gg, cloud = anygrasp.get_grasp(
+    points,
+    colors,
+    lims=lims,
+    apply_object_mask=True,
+    dense_grasp=False,
+    collision_detection=True
+)
 
-# # Run grasp detection
-# gg, cloud = anygrasp.get_grasp(
-#     points,
-#     colors,
-#     lims=lims,
-#     apply_object_mask=True,
-#     dense_grasp=False,
-#     collision_detection=True
-# )
+# Check for detected grasps
+if len(gg) == 0:
+    print('No Grasp detected after collision detection!')
+else:
+    gg = gg.nms().sort_by_score()
+    gg_pick = gg[0:20]
+    print(gg_pick.scores)
+    print('Top grasp score:', gg_pick[0].score)
 
-# # Check for detected grasps
-# if len(gg) == 0:
-#     print('No Grasp detected after collision detection!')
-# else:
-#     gg = gg.nms().sort_by_score()
-#     gg_pick = gg[0:20]
-#     print(gg_pick.scores)
-#     print('Top grasp score:', gg_pick[0].score)
-
-# # Visualize the detected grasps
-# import open3d as o3d
-# pcd = o3d.geometry.PointCloud()
-# pcd.points = o3d.utility.Vector3dVector(points)
-# pcd.colors = o3d.utility.Vector3dVector(colors)
-# grippers = gg.to_open3d_geometry_list()
-# o3d.visualization.draw_geometries([pcd] + grippers)
+# Visualize the detected grasps
+import open3d as o3d
+pcd = o3d.geometry.PointCloud()
+pcd.points = o3d.utility.Vector3dVector(points)
+pcd.colors = o3d.utility.Vector3dVector(colors)
+grippers = gg.to_open3d_geometry_list()
+o3d.visualization.draw_geometries([pcd] + grippers)
 
 # # Keep meshcat alive
 # meshcat.PublishRecording()
