@@ -31,4 +31,17 @@ In the Drake simulation, the objects will be of unknown types, and the room may 
    python setup.py install --blas_include_dirs=${CONDA_PREFIX}/include --blas=openblas
    ```
 3. Clone the AnyGrasp repository and follow install instructions
-4. Get license and download checkpoints
+4. Get license and download checkpoints, follow structure:
+    .
+    ├── anygrasp_sdk            
+    │   ├── grasp_detection
+    │   │   ├── license                         # License folder
+    │   │   ├── checkpoints                     # Create this folder
+    │   │   │   ├── checkpoint_detection.tar    # Checkpoint from AnyGrasp (link to download from email)
+    │   │   ├── gsnet.so                        # Make sure it is the python 3.10 version
+    │   │   ├── lib_cxx.so                      # Make sure it is the python 3.10 version
+    |   │   └── ...
+    │   └── ...
+    ├── main.py
+    └── ...
+   
