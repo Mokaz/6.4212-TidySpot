@@ -127,13 +127,13 @@ colors = np.array(color_image, dtype=np.float32) / 255.0
 depths = np.squeeze(depth_image)
 
 depths = np.squeeze(depths).copy()  # Make a writable copy
-depths[depths == np.inf] = 0  # Replace infinite values
+# depths[depths == np.inf] = 0  # Replace infinite values
 
-print(f"Data type of color_image: {type(colors)}")
-print(f'Shape of color_image: {colors.shape}')
+# print(f"Data type of color_image: {type(colors)}")
+# print(f'Shape of color_image: {colors.shape}')
 
-print(f"Data type of depth_image: {type(depths)}")
-print(f'Shape of depth_image: {depths.shape}')
+# print(f"Data type of depth_image: {type(depths)}")
+# print(f'Shape of depth_image: {depths.shape}')
 
 frontleft_camera_system = station.GetSubsystemByName("rgbd_sensor_frontleft")
 camera_info = frontleft_camera_system.default_depth_render_camera().core().intrinsics()
@@ -162,16 +162,18 @@ mask = (points_z > zmin) & (points_z < zmax) & \
        (points_y > ymin) & (points_y < ymax)
 
 points = np.stack([points_x, points_y, points_z], axis=-1)
+print(f"Points shape before mask: {points.shape}")
+
 points = points[mask].astype(np.float32)
 colors = colors[mask].astype(np.float32)
 
-print(f"Filtered points shape: {points.shape}")
+print(f"Points shape after mask: {points.shape}")
 
-import open3d as o3d
+# import open3d as o3d
 pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(points)
 pcd.colors = o3d.utility.Vector3dVector(colors)
-o3d.visualization.draw_geometries([pcd])
+# o3d.visualization.draw_geometries([pcd])
 
 #################
 ### DRAKE PCD ###
@@ -183,101 +185,111 @@ frontleft_pcd = to_point_cloud["frontleft"].get_output_port().Eval(fl_context)
 # meshcat.SetObject("frontleft.cloud", frontleft_pcd, rgba=Rgba(1.0, 0.0, 0.0, 1.0))
 
 # Extract points and colors from Drake point cloud
-# points = frontleft_pcd.xyzs().T.astype(np.float32)          # Shape: (N, 3)
-# colors = frontleft_pcd.rgbs().T.astype(np.float32) / 255.0 # Shape: (N, 3)
+drake_points = frontleft_pcd.xyzs().T.astype(np.float32)          # Shape: (N, 3)
+drake_colors = frontleft_pcd.rgbs().T.astype(np.float32) / 255.0 # Shape: (N, 3)
 
-# # Print shapes for verification
-# print("Points shape:", points.shape)
+cam_frontleft = camera_hub._cameras["frontleft"]
+
+cam_frontleft_context = cam_frontleft.GetMyContextFromRoot(simulator.get_context())
+X_WC = cam_frontleft.body_pose_in_world_output_port().Eval(cam_frontleft_context)
+
+
 # print("Colors shape:", colors.shape)
 
-# Extract points and colors without transposing
-# points_raw = frontleft_pcd.xyzs()
-# colors_raw = frontleft_pcd.rgbs()
-
-# print("Raw Points shape:", points_raw.shape)
-# print("Raw Colors shape:", colors_raw.shape)
-
-# Identify valid points (finite values)
 # valid_mask = np.isfinite(points).all(axis=1)
 
-# # Filter points and colors
-# filtered_points = points[valid_mask]
+# drake_points = drake_points[mask]
 # filtered_colors = colors[valid_mask] 
+
+flat_mask = mask.flatten()  # Shape: (307200,)
+drake_points = drake_points[flat_mask]
+
+print("drake_points shape:", drake_points.shape)
+
+drake_points = X_WC.inverse().multiply(drake_points.T).T
+
+# Check if the numpy arrays are the same
+are_arrays_equal = np.array_equal(points, drake_points)
+print("Are the numpy arrays the same?", are_arrays_equal)
+
+# Find the differences between the numpy arrays
+differences = points - drake_points
+print("Differences between the numpy arrays:", differences)
 
 # # Print the number of valid points
 # print(f"Original number of points: {points.shape[0]}")
 # print(f"Number of valid points: {filtered_points.shape[0]}")
 
 # # Create Open3D PointCloud object
-# pcd_visual = o3d.geometry.PointCloud()
-# pcd_visual.points = o3d.utility.Vector3dVector(filtered_points)
+pcd_visual = o3d.geometry.PointCloud()
+pcd_visual.points = o3d.utility.Vector3dVector(drake_points)
 # pcd_visual.colors = o3d.utility.Vector3dVector(filtered_colors)
+# Create origin axis
+axis_length = 0.1
+axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=axis_length, origin=[0, 0, 0])
 
-# print(filtered_colors.shape)
-# print(filtered_points.shape)
-
-# Visualize the point cloud
-# o3d.visualization.draw_geometries([pcd_visual])
+# Visualize the point clouds and the origin axis
+# o3d.visualization.draw_geometries([pcd_visual, pcd, axis])
 
 ################
 ################
 
 ### Anygrasp ###
 
-import torch
-torch.cuda.empty_cache()
+# import torch
+# torch.cuda.empty_cache()
 
-from anygrasp_sdk.grasp_detection.gsnet import AnyGrasp
+# from anygrasp_sdk.grasp_detection.gsnet import AnyGrasp
 
-# Define configuration
-import argparse
-parser = argparse.ArgumentParser()
-parser.add_argument('--checkpoint_path', default=f'{os.getcwd()}/anygrasp_sdk/grasp_detection/log/checkpoint_detection.tar', help='Model checkpoint path')
-parser.add_argument('--max_gripper_width', type=float, default=0.1, help='Maximum gripper width (<=0.1m)')
-parser.add_argument('--gripper_height', type=float, default=0.03, help='Gripper height')
-parser.add_argument('--top_down_grasp', action='store_true', help='Output top-down grasps.')
-parser.add_argument('--debug', action='store_true', help='Enable debug mode')
-cfgs = parser.parse_args(args=[])
+# # Define configuration
+# import argparse
+# parser = argparse.ArgumentParser()
+# parser.add_argument('--checkpoint_path', default=f'{os.getcwd()}/anygrasp_sdk/grasp_detection/log/checkpoint_detection.tar', help='Model checkpoint path')
+# parser.add_argument('--max_gripper_width', type=float, default=0.1, help='Maximum gripper width (<=0.1m)')
+# parser.add_argument('--gripper_height', type=float, default=0.03, help='Gripper height')
+# parser.add_argument('--top_down_grasp', action='store_true', help='Output top-down grasps.')
+# parser.add_argument('--debug', action='store_true', help='Enable debug mode')
+# cfgs = parser.parse_args(args=[])
 
-# Initialize AnyGrasp
-anygrasp = AnyGrasp(cfgs)
-anygrasp.load_net()
-
-# Define workspace limits (adjust as needed)
-# lims = [-np.inf, np.inf, -np.inf, np.inf, -np.inf, np.inf]
+# # Initialize AnyGrasp
+# anygrasp = AnyGrasp(cfgs)
+# anygrasp.load_net()
 
 # # Define workspace limits (adjust as needed)
-# xmin, xmax = -10.0, 10.0
-# ymin, ymax = 10.0, 10.0
-# zmin, zmax = 10.0, 10.0
-# lims = [xmin, xmax, ymin, ymax, zmin, zmax]
+# # lims = [-np.inf, np.inf, -np.inf, np.inf, -np.inf, np.inf]
 
-# Run grasp detection
-gg, cloud = anygrasp.get_grasp(
-    points,
-    colors,
-    lims=lims,
-    apply_object_mask=True,
-    dense_grasp=False,
-    collision_detection=True
-)
+# # # Define workspace limits (adjust as needed)
+# # xmin, xmax = -10.0, 10.0
+# # ymin, ymax = 10.0, 10.0
+# # zmin, zmax = 10.0, 10.0
+# # lims = [xmin, xmax, ymin, ymax, zmin, zmax]
 
-# Check for detected grasps
-if len(gg) == 0:
-    print('No Grasp detected after collision detection!')
-else:
-    gg = gg.nms().sort_by_score()
-    gg_pick = gg[0:20]
-    print(gg_pick.scores)
-    print('Top grasp score:', gg_pick[0].score)
+# # Run grasp detection
+# gg, cloud = anygrasp.get_grasp(
+#     points,
+#     colors,
+#     lims=lims,
+#     apply_object_mask=True,
+#     dense_grasp=False,
+#     collision_detection=True
+# )
 
-# Visualize the detected grasps
-import open3d as o3d
-pcd = o3d.geometry.PointCloud()
-pcd.points = o3d.utility.Vector3dVector(points)
-pcd.colors = o3d.utility.Vector3dVector(colors)
-grippers = gg.to_open3d_geometry_list()
-o3d.visualization.draw_geometries([pcd] + grippers)
+# # Check for detected grasps
+# if len(gg) == 0:
+#     print('No Grasp detected after collision detection!')
+# else:
+#     gg = gg.nms().sort_by_score()
+#     gg_pick = gg[0:20]
+#     print(gg_pick.scores)
+#     print('Top grasp score:', gg_pick[0].score)
+
+# # Visualize the detected grasps
+# import open3d as o3d
+# pcd = o3d.geometry.PointCloud()
+# pcd.points = o3d.utility.Vector3dVector(points)
+# pcd.colors = o3d.utility.Vector3dVector(colors)
+# grippers = gg.to_open3d_geometry_list()
+# o3d.visualization.draw_geometries([pcd] + grippers)
 
 # # Keep meshcat alive
 # meshcat.PublishRecording()
