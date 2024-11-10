@@ -11,13 +11,26 @@ and PythonRobotics implementation (https://github.com/AtsushiSakai/PythonRobotic
 """
 
 import math
+import numpy as np
 import matplotlib.pyplot as plt
 import heapq
+from pydrake.all import (
+    AbstractValue,
+    DiagramBuilder,
+    LeafSystem,
+    Context,
+    ImageRgba8U,
+    ImageDepth32F,
+    ImageLabel16I,
+    Diagram,
+    PointCloud,
+)
+from navigation.map_helpers import PointCloudProcessor
 
 show_animation = True
 
-class DynamicPathPlanner:
-    def __init__(self, ox, oy, resolution, robot_radius):
+class DynamicPathPlanner(LeafSystem):
+    def __init__(self, station: Diagram, point_cloud_processor, ox, oy, resolution, robot_radius):
         """
         Initialize grid map for A* planning.
 
@@ -26,11 +39,32 @@ class DynamicPathPlanner:
         resolution: grid resolution
         robot_radius: robot radius
         """
+        LeafSystem.__init__(self)
+        self.point_cloud_processor = point_cloud_processor
         self.resolution = resolution
         self.robot_radius = robot_radius
         self.motion = self.get_motion_model()
         self.obstacles = set(zip(ox, oy))  # Store obstacles as a set for easy access
-        self.calc_obstacle_map(ox, oy)
+        # self.calc_obstacle_map(ox, oy)
+
+        # Declare input and output ports
+        self._grid_map_input_index = self.DeclareAbstractInputPort("grid_map", AbstractValue.Make(np.zeros((1, 1)))).get_index()
+        self._next_goal_input_index = self.DeclareVectorInputPort("goal", 2).get_index()
+
+        self._next_position_output_index = self.DeclareVectorOutputPort("next_position", 2, self.CalcNextPosition).get_index()
+
+    def connect_processor(self, station: Diagram, builder: DiagramBuilder):
+        point_cloud_processor_output = self.point_cloud_processor.GetOutputPort("grid_map")
+        grid_map_input = self.get_input_port(self._grid_map_input_index)
+
+        builder.Connect(point_cloud_processor_output, grid_map_input)
+
+    def CalcNextPosition(self, context: Context, output: AbstractValue):
+        grid_map = self.EvalAbstractInput(context, self._grid_map_input_index).get_value()
+        goal = self.EvalVectorInput(context, self._next_goal_input_index).get_value()
+        rx, ry = self.planning(self.current_position, goal)
+        next_position = (rx[1], ry[1])
+        output.set_value(next_position)
 
     class Node:
         def __init__(self, x, y, cost, parent_index):
