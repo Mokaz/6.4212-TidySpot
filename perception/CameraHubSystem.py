@@ -42,7 +42,7 @@ class CameraHubSystem(LeafSystem):
             for camera_name in camera_names
         }
 
-        # Declare point cloud input ports
+        # Declare point cloud input ports (Maybe not needed)
         self._pcd_inputs = {
             camera_name: self.DeclareAbstractInputPort(
                 f"{camera_name}.point_cloud",

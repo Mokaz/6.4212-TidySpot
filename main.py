@@ -13,7 +13,7 @@ from manipulation.station import (
 )
 
 from utils import *
-from perception import CameraHubSystem
+from perception.CameraHubSystem import CameraHubSystem
 
 import os
 import sys
