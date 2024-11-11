@@ -50,12 +50,17 @@ class TidySpotPlanner(LeafSystem):
             AbstractValue.Make({"initial": 0.0})
         )
         self._attempts_index = self.DeclareDiscreteState(1)
+        self._exploring = self.DeclareDiscreteState(1)
 
         # Input ports
         self._spot_body_state_index = self.DeclareVectorInputPort("body_poses", 20).get_index()
         #self._grasp_input_index = self.DeclareAbstractInputPort("grasp_selection", AbstractValue.Make((np.inf, RigidTransform()))).get_index()
         #self._wsg_state_index = self.DeclareVectorInputPort("wsg_state", 2).get_index()
         self._path_planning_desired_index = self.DeclareVectorInputPort("path_planning_desired", 3).get_index()
+
+        # Input ports for various components
+        self.DeclareVectorInputPort("object_detected", 1)
+        self.DeclareVectorInputPort("path_planning_finished", 1)
 
         # Output ports
         # self.DeclareAbstractOutputPort("X_WG", lambda: AbstractValue.Make(RigidTransform()), self.CalcGripperPose)
@@ -79,19 +84,27 @@ class TidySpotPlanner(LeafSystem):
 
     def connect_components(self, builder, station):
         builder.Connect(station.GetOutputPort("spot.state_estimated"), self.get_input_port(self._spot_body_state_index))
-        # builder.Connect(self.get_output_port(self._spot_commanded_state_index), station.GetInputPort("spot.desired_state"))
+        builder.Connect(self.get_output_port(self._spot_commanded_state_index), station.GetInputPort("spot.desired_state"))
 
 
         # Connect the path planner to the FSM planner
         builder.Connect(self.get_output_port(self._path_planning_goal_output), self.dynamic_path_planner.GetInputPort("goal"))
         builder.Connect(self.get_output_port(self._path_planning_position_output), self.dynamic_path_planner.GetInputPort("robot_position"))
+        builder.Connect(self.dynamic_path_planner.GetOutputPort("done_astar"), self.GetInputPort("path_planning_finished"))
         # builder.Connect(self.dynamic_path_planner.GetOutputPort("next_position"), self.get_input_port(self._path_planning_desired_index))
 
     def get_spot_state_input_port(self):
         return self.GetInputPort("body_poses")
 
+    def get_path_planning_finished_input_port(self):
+        return self.GetInputPort("path_planning_finished")
+
     def _initialize_state(self, context: Context, state: State):
         self.robot_state = self.get_spot_state_input_port().Eval(context)
+        state.get_mutable_discrete_state(self._exploring).set_value([0])
+
+    def _get_explore_completed(self, context, state):
+        return self.get_path_planning_finished_input_port().Eval(context)[0]
 
 
     def Update(self, context, state):
@@ -109,16 +122,27 @@ class TidySpotPlanner(LeafSystem):
                 int(self._state_index)
             ).set_value(SpotState.EXPLORE)
 
+            # select a new area to explore and go to it
+            new_area = self.explore_environment()
+
         elif mode == SpotState.EXPLORE:
             # Explore until an object is detected
-            new_area = self.explore_environment()
-            if self.detect_object():
-                print("State: EXPLORE -> DETECT_OBJECT")
-                state.get_mutable_abstract_state(
-                    int(self._state_index)
-                ).set_value(SpotState.DETECT_OBJECT)
+            if self._get_explore_completed(context, state):
+                print("Exploration completed to area.")
+                if self.detect_object():
+                    print("State: EXPLORE -> DETECT_OBJECT")
+                    state.get_mutable_abstract_state(
+                        int(self._state_index)
+                    ).set_value(SpotState.DETECT_OBJECT)
+                else:
+                    print("Failed to detect object. Returning to EXPLORE.")
+                    new_area = self.explore_environment()
+                    state.get_mutable_abstract_state(
+                        int(self._state_index)
+                    ).set_value(SpotState.IDLE)
             else:
-                print(f"Explored area at {new_area}")
+                print(f"Exploring area at {self.path_planning_goal}")
+                
 
         elif mode == SpotState.DETECT_OBJECT:
             if self.detected_objects:
@@ -225,9 +249,8 @@ class TidySpotPlanner(LeafSystem):
         print("TODO: Actually implement this")
         # Simulate exploring a new area
 
-        new_area = (random.randint(1, 10), random.randint(1, 10))
+        new_area = (random.randint(-5, 5), random.randint(-5, 5))
         self.explored_area.add(new_area)
 
         self.path_planning_goal = (new_area[0], new_area[1], 0.0)
-
-        return new_area
+        return self.path_planning_goal

@@ -31,14 +31,14 @@ from navigation.map_helpers import PointCloudProcessor
 show_animation = True
 
 class DynamicPathPlanner(LeafSystem):
-    def __init__(self, station: Diagram, point_cloud_processor, initial_position, resolution, robot_radius):
+    def __init__(self, station: Diagram, point_cloud_processor: PointCloudProcessor, initial_position, resolution, robot_radius):
         """
         Initialize grid map for A* planning.
 
-        ox: x positions of obstacles
-        oy: y positions of obstacles
-        resolution: grid resolution
-        robot_radius: robot radius
+        point_cloud_processor: The PointCloudProcessor instance for obtaining the updated grid map.
+        initial_position: Initial position of the robot.
+        resolution: Grid resolution.
+        robot_radius: Robot radius.
         """
         LeafSystem.__init__(self)
         self.point_cloud_processor = point_cloud_processor
@@ -52,12 +52,10 @@ class DynamicPathPlanner(LeafSystem):
         self.DeclareStateOutputPort("base_position", self._base_position)
         self.DeclareStateOutputPort("done_astar", self._done_astar)
 
-
         self.motion = self.get_motion_model()
-        # self.calc_obstacle_map(ox, oy)
 
         # Declare input and output ports
-        self._grid_map_input_index = self.DeclareAbstractInputPort("grid_map", AbstractValue.Make(np.zeros((1, 1)))).get_index()
+        self._grid_map_input_index = self.DeclareAbstractInputPort("grid_map", AbstractValue.Make(np.zeros((100, 100)))).get_index()
         self._next_goal_input_index = self.DeclareVectorInputPort("goal", 3).get_index()
         self._robot_position_input_index = self.DeclareVectorInputPort("robot_position", 3).get_index()
 
@@ -67,24 +65,16 @@ class DynamicPathPlanner(LeafSystem):
         self.DeclareInitializationUnrestrictedUpdateEvent(self._initialize_state)
         self.DeclarePeriodicUnrestrictedUpdateEvent(period_sec=0.1, offset_sec=0.0, update=self.calc_next_position)
 
-
     def connect_processor(self, station: Diagram, builder: DiagramBuilder):
-        point_cloud_processor_output = self.point_cloud_processor.GetOutputPort("grid_map")
+        point_cloud_processor_output = self.point_cloud_processor.get_output_port(0)  # Output grid_map from point cloud processor
         grid_map_input = self.get_input_port(self._grid_map_input_index)
 
         builder.Connect(point_cloud_processor_output, grid_map_input)
 
-
     def CalcNextPosition(self, context: Context, output: AbstractValue):
         output.set_value(self.next_position)
 
-    def _initialize_state(self, context: Context, state: State):
-        # try:
-        #     self.current_position = self.EvalVectorInput(context, self._robot_position_input_index).get_value()
-        #     self.goal = self.EvalVectorInput(context, self._next_goal_input_index).get_value()
-        # except:
-        #     self.current_position = (0, 0, 0)
-        #     self.goal = (1, 1, 0)
+    def _initialize_state(self, context: Context, state):
         state.get_mutable_discrete_state(self._base_position).set_value(self._initial_position)
         state.get_mutable_discrete_state(self._done_astar).set_value([0])
 
@@ -94,13 +84,15 @@ class DynamicPathPlanner(LeafSystem):
     def _get_current_position(self, context: Context):
         return self.get_spot_state_input_port().Eval(context)
 
-    def calc_next_position(self, context: Context, state: State):
+    def calc_next_position(self, context: Context, state):
         grid_map = self.EvalAbstractInput(context, self._grid_map_input_index).get_value()
         goal = self.EvalVectorInput(context, self._next_goal_input_index).get_value()
         self.current_position = self._get_current_position(context)
-        rx, ry = self.planning(self.current_position, goal)
-        self.next_position = (rx[1], ry[1])
-        return self.next_position
+        rx, ry = self.planning(self.current_position, goal, grid_map)
+        if len(rx) > 1:
+            self.next_position = (rx[1], ry[1])
+        else:
+            self.next_position = self.current_position[:2]
 
     class Node:
         def __init__(self, x, y, cost, parent_index):
@@ -109,17 +101,18 @@ class DynamicPathPlanner(LeafSystem):
             self.cost = cost
             self.parent_index = parent_index
 
-    def planning(self, start, goal):
+    def planning(self, start, goal, grid_map):
         """
-        Perform A* path planning.
+        Perform A* path planning using the provided grid_map.
 
         start: tuple of start position (x, y)
         goal: tuple of goal position (x, y)
+        grid_map: The updated grid map from PointCloudProcessor.
         """
-        start_node = self.Node(self.calc_xy_index(start[0], self.min_x),
-                               self.calc_xy_index(start[1], self.min_y), 0.0, -1)
-        goal_node = self.Node(self.calc_xy_index(goal[0], self.min_x),
-                              self.calc_xy_index(goal[1], self.min_y), 0.0, -1)
+        start_node = self.Node(self.calc_xy_index(start[0], grid_map.shape[1] // 2),
+                               self.calc_xy_index(start[1], grid_map.shape[0] // 2), 0.0, -1)
+        goal_node = self.Node(self.calc_xy_index(goal[0], grid_map.shape[1] // 2),
+                              self.calc_xy_index(goal[1], grid_map.shape[0] // 2), 0.0, -1)
 
         open_set, closed_set = dict(), dict()
         open_set[self.calc_grid_index(start_node)] = start_node
@@ -127,12 +120,6 @@ class DynamicPathPlanner(LeafSystem):
         while open_set:
             c_id = min(open_set, key=lambda o: open_set[o].cost + self.calc_heuristic(goal_node, open_set[o]))
             current = open_set[c_id]
-
-            # Animation
-            if show_animation:
-                plt.plot(self.calc_grid_position(current.x, self.min_x),
-                         self.calc_grid_position(current.y, self.min_y), "xc")
-                plt.pause(0.001)
 
             if current.x == goal_node.x and current.y == goal_node.y:
                 goal_node.parent_index = current.parent_index
@@ -149,7 +136,7 @@ class DynamicPathPlanner(LeafSystem):
                                  current.cost + self.motion[i][2], c_id)
                 n_id = self.calc_grid_index(node)
 
-                if not self.verify_node(node):
+                if not self.verify_node(node, grid_map):
                     continue
 
                 if n_id in closed_set:
@@ -165,12 +152,12 @@ class DynamicPathPlanner(LeafSystem):
         return rx, ry
 
     def calc_final_path(self, goal_node, closed_set):
-        rx, ry = [self.calc_grid_position(goal_node.x, self.min_x)], [self.calc_grid_position(goal_node.y, self.min_y)]
+        rx, ry = [self.calc_grid_position(goal_node.x, self.resolution)], [self.calc_grid_position(goal_node.y, self.resolution)]
         parent_index = goal_node.parent_index
         while parent_index != -1:
             n = closed_set[parent_index]
-            rx.append(self.calc_grid_position(n.x, self.min_x))
-            ry.append(self.calc_grid_position(n.y, self.min_y))
+            rx.append(self.calc_grid_position(n.x, self.resolution))
+            ry.append(self.calc_grid_position(n.y, self.resolution))
             parent_index = n.parent_index
         return rx, ry
 
@@ -178,147 +165,27 @@ class DynamicPathPlanner(LeafSystem):
         w = 1.0
         return w * math.hypot(n1.x - n2.x, n1.y - n2.y)
 
-    def calc_grid_position(self, index, min_position):
-        return index * self.resolution + min_position
+    def calc_grid_position(self, index, resolution):
+        return index * resolution
 
-    def calc_xy_index(self, position, min_pos):
-        return round((position - min_pos) / self.resolution)
+    def calc_xy_index(self, position, center_index):
+        return round((position + (center_index * self.resolution)) / self.resolution)
 
     def calc_grid_index(self, node):
-        return (node.y - self.min_y) * self.x_width + (node.x - self.min_x)
+        return node.y * 100 + node.x  # Assuming grid_map of size 100x100
 
-    def verify_node(self, node):
-        px = self.calc_grid_position(node.x, self.min_x)
-        py = self.calc_grid_position(node.y, self.min_y)
-        if px < self.min_x or py < self.min_y or px >= self.max_x or py >= self.max_y:
+    def verify_node(self, node, grid_map):
+        """
+        Verifies if the node is traversable.
+        The robot can only travel in free space (0) or unexplored space (-1).
+        """
+
+        if node.x < 0 or node.y < 0 or node.x >= grid_map.shape[1] or node.y >= grid_map.shape[0]:
             return False
-        return not self.obstacle_map[node.x][node.y]
-
-    def calc_obstacle_map(self, ox, oy):
-        self.min_x = round(min(ox))
-        self.min_y = round(min(oy))
-        self.max_x = round(max(ox))
-        self.max_y = round(max(oy))
-
-        self.x_width = round((self.max_x - self.min_x) / self.resolution)
-        self.y_width = round((self.max_y - self.min_y) / self.resolution)
-
-        # Generate obstacle map
-        self.obstacle_map = [[False for _ in range(self.y_width)] for _ in range(self.x_width)]
-        for ix in range(self.x_width):
-            x = self.calc_grid_position(ix, self.min_x)
-            for iy in range(self.y_width):
-                y = self.calc_grid_position(iy, self.min_y)
-                for iox, ioy in zip(ox, oy):
-                    d = math.hypot(iox - x, ioy - y)
-                    if d <= self.robot_radius:
-                        self.obstacle_map[ix][iy] = True
-                        break
+        return grid_map[node.x, node.y] == 0 or grid_map[node.x, node.y] == -1
 
     @staticmethod
     def get_motion_model():
         return [[1, 0, 1], [0, 1, 1], [-1, 0, 1], [0, -1, 1],
                 [-1, -1, math.sqrt(2)], [-1, 1, math.sqrt(2)],
                 [1, -1, math.sqrt(2)], [1, 1, math.sqrt(2)]]
-
-    def update_with_new_area(self, discovered_cells):
-        """
-        Update the grid dynamically with new discovered cells.
-        """
-        for (x, y), state in discovered_cells.items():
-            if state == 1:  # Add obstacle
-                self.obstacles.add((x, y))
-            elif state == 0 and (x, y) in self.obstacles:  # Remove obstacle if marked free
-                self.obstacles.remove((x, y))
-        self.calc_obstacle_map([x for x, y in self.obstacles], [y for x, y in self.obstacles])
-
-    def update_current_position(self, new_position):
-        """
-        Update the robot's current position.
-        """
-        self.current_position = new_position
-        print(f"Updated current position to {self.current_position}")
-
-    def set_new_goal(self, new_goal):
-        """
-        Set a new goal for the robot.
-        """
-        self.goal = new_goal
-        print(f"New goal set to {self.goal}")
-
-    def print_grid(self):
-        """
-        Print a subset of the grid around the start and goal for visualization.
-        """
-        min_x = min(self.min_x, self.current_position[0], self.goal[0]) - 1
-        max_x = max(self.max_x, self.current_position[0], self.goal[0]) + 1
-        min_y = min(self.min_y, self.current_position[1], self.goal[1]) - 1
-        max_y = max(self.max_y, self.current_position[1], self.goal[1]) + 1
-
-        for y in range(min_y, max_y + 1):
-            for x in range(min_x, max_x + 1):
-                if (x, y) in self.obstacles:
-                    print("#", end=" ")
-                elif (x, y) == self.current_position:
-                    print("R", end=" ")
-                elif (x, y) == self.goal:
-                    print("G", end=" ")
-                else:
-                    print(".", end=" ")
-            print()
-        print()
-
-def main():
-    print("A* pathfinding with animation")
-
-    sx = 10.0  # start x position
-    sy = 10.0  # start y position
-    gx = 50.0  # goal x position
-    gy = 50.0  # goal y position
-    grid_size = 2.0
-    robot_radius = 1.0
-
-    # Define initial obstacle positions
-    ox, oy = [], []
-    for i in range(-10, 60):
-        ox.append(i)
-        oy.append(-10.0)
-    for i in range(-10, 60):
-        ox.append(60.0)
-        oy.append(i)
-    for i in range(-10, 61):
-        ox.append(i)
-        oy.append(60.0)
-    for i in range(-10, 61):
-        ox.append(-10.0)
-        oy.append(i)
-    for i in range(-10, 40):
-        ox.append(20.0)
-        oy.append(i)
-    for i in range(0, 40):
-        ox.append(40.0)
-        oy.append(60.0 - i)
-
-    if show_animation:
-        plt.plot(ox, oy, ".k")
-        plt.plot(sx, sy, "og")
-        plt.plot(gx, gy, "xb")
-        plt.grid(True)
-        plt.axis("equal")
-
-    planner = DynamicPathPlanner(ox, oy, grid_size, robot_radius)
-
-    # Update new obstacles dynamically
-    new_area = {(30, 30): 1, (31, 31): 1, (32, 32): 1}
-    planner.update_with_new_area(new_area)
-
-    # Planning path from start to goal
-    rx, ry = planner.planning((sx, sy), (gx, gy))
-
-    if show_animation:
-        plt.plot(rx, ry, "-r")
-        plt.pause(0.001)
-        plt.show()
-
-if __name__ == '__main__':
-    main()
