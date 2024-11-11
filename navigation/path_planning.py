@@ -19,6 +19,7 @@ from pydrake.all import (
     DiagramBuilder,
     LeafSystem,
     Context,
+    State,
     ImageRgba8U,
     ImageDepth32F,
     ImageLabel16I,
@@ -30,7 +31,7 @@ from navigation.map_helpers import PointCloudProcessor
 show_animation = True
 
 class DynamicPathPlanner(LeafSystem):
-    def __init__(self, station: Diagram, point_cloud_processor, ox, oy, resolution, robot_radius):
+    def __init__(self, station: Diagram, point_cloud_processor, initial_position, resolution, robot_radius):
         """
         Initialize grid map for A* planning.
 
@@ -41,17 +42,31 @@ class DynamicPathPlanner(LeafSystem):
         """
         LeafSystem.__init__(self)
         self.point_cloud_processor = point_cloud_processor
+        self._initial_position = initial_position
         self.resolution = resolution
         self.robot_radius = robot_radius
+
+        # Drake internal states and output port
+        self._base_position = self.DeclareDiscreteState(3)
+        self._done_astar = self.DeclareDiscreteState(1)
+        self.DeclareStateOutputPort("base_position", self._base_position)
+        self.DeclareStateOutputPort("done_astar", self._done_astar)
+
+
         self.motion = self.get_motion_model()
-        self.obstacles = set(zip(ox, oy))  # Store obstacles as a set for easy access
         # self.calc_obstacle_map(ox, oy)
 
         # Declare input and output ports
         self._grid_map_input_index = self.DeclareAbstractInputPort("grid_map", AbstractValue.Make(np.zeros((1, 1)))).get_index()
-        self._next_goal_input_index = self.DeclareVectorInputPort("goal", 2).get_index()
+        self._next_goal_input_index = self.DeclareVectorInputPort("goal", 3).get_index()
+        self._robot_position_input_index = self.DeclareVectorInputPort("robot_position", 3).get_index()
 
-        self._next_position_output_index = self.DeclareVectorOutputPort("next_position", 2, self.CalcNextPosition).get_index()
+        self._next_position_output_index = self.DeclareVectorOutputPort("next_position", 3, self.CalcNextPosition).get_index()
+
+        # Initialize and update
+        self.DeclareInitializationUnrestrictedUpdateEvent(self._initialize_state)
+        self.DeclarePeriodicUnrestrictedUpdateEvent(period_sec=0.1, offset_sec=0.0, update=self.calc_next_position)
+
 
     def connect_processor(self, station: Diagram, builder: DiagramBuilder):
         point_cloud_processor_output = self.point_cloud_processor.GetOutputPort("grid_map")
@@ -59,12 +74,33 @@ class DynamicPathPlanner(LeafSystem):
 
         builder.Connect(point_cloud_processor_output, grid_map_input)
 
+
     def CalcNextPosition(self, context: Context, output: AbstractValue):
+        output.set_value(self.next_position)
+
+    def _initialize_state(self, context: Context, state: State):
+        # try:
+        #     self.current_position = self.EvalVectorInput(context, self._robot_position_input_index).get_value()
+        #     self.goal = self.EvalVectorInput(context, self._next_goal_input_index).get_value()
+        # except:
+        #     self.current_position = (0, 0, 0)
+        #     self.goal = (1, 1, 0)
+        state.get_mutable_discrete_state(self._base_position).set_value(self._initial_position)
+        state.get_mutable_discrete_state(self._done_astar).set_value([0])
+
+    def get_spot_state_input_port(self):
+        return self.get_input_port(self._robot_position_input_index)
+
+    def _get_current_position(self, context: Context):
+        return self.get_spot_state_input_port().Eval(context)
+
+    def calc_next_position(self, context: Context, state: State):
         grid_map = self.EvalAbstractInput(context, self._grid_map_input_index).get_value()
         goal = self.EvalVectorInput(context, self._next_goal_input_index).get_value()
+        self.current_position = self._get_current_position(context)
         rx, ry = self.planning(self.current_position, goal)
-        next_position = (rx[1], ry[1])
-        output.set_value(next_position)
+        self.next_position = (rx[1], ry[1])
+        return self.next_position
 
     class Node:
         def __init__(self, x, y, cost, parent_index):

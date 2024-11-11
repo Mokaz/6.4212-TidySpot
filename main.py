@@ -81,7 +81,7 @@ point_cloud_processor.set_name("point_cloud_processor")
 point_cloud_processor.connect_point_clouds(station, builder)
 
 # Add path planner and mapper
-dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, point_cloud_processor, ox=[], oy=[], resolution=0.1, robot_radius=0.1))
+dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, point_cloud_processor, np.array([0,0,0]), resolution=0.1, robot_radius=0.1))
 dynamic_path_planner.set_name("dynamic_path_planner")
 dynamic_path_planner.connect_processor(station, builder)
 
@@ -89,7 +89,6 @@ dynamic_path_planner.connect_processor(station, builder)
 tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner))
 tidy_spot_planner.set_name("tidy_spot_planner")
 tidy_spot_planner.connect_components(builder, station)
-
 
 diagram = builder.Build()
 context = diagram.CreateDefaultContext()
@@ -129,7 +128,7 @@ simulator.set_target_realtime_rate(1)
 simulator.set_publish_every_time_step(True)
 
 meshcat.StartRecording()
-simulator.AdvanceTo(2.0)
+simulator.AdvanceTo(5.0)
 meshcat.PublishRecording()
 
 # Keep meshcat alive
