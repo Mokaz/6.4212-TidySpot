@@ -27,12 +27,12 @@ class CameraHubSystem(LeafSystem):
             }
 
         # Declare input ports for the CameraHubSystem
-        self._camera_inputs = {
+        self._camera_inputs_indexes = {
             camera_name: {
                 image_type: self.DeclareAbstractInputPort(
                     f"{camera_name}.{image_type}",
                     AbstractValue.Make(image_class(image_size[0], image_size[1]))
-                )
+                ).get_index()
                 for image_type, image_class in {
                     'rgb_image': ImageRgba8U,
                     'depth_image': ImageDepth32F,
@@ -43,31 +43,31 @@ class CameraHubSystem(LeafSystem):
         }
 
         # Declare point cloud input ports (Maybe not needed)
-        self._pcd_inputs = {
-            camera_name: self.DeclareAbstractInputPort(
-                f"{camera_name}.point_cloud",
-                AbstractValue.Make(PointCloud(0))
-            )
-            for camera_name in camera_names
-        }
+        # self._pcd_inputs_indexes = {
+        #     camera_name: self.DeclareAbstractInputPort(
+        #         f"{camera_name}.point_cloud",
+        #         AbstractValue.Make(PointCloud(0))
+        #     ).get_index()
+        #     for camera_name in camera_names
+        # }
 
     def connect_cameras(self, station: Diagram, builder: DiagramBuilder):
         for camera_name in self._camera_names:
             for image_type in ['rgb_image', 'depth_image', 'label_image']:
                 builder.Connect(
                     station.GetOutputPort(f"{camera_name}.{image_type}"),
-                    self._camera_inputs[camera_name][image_type]
+                    self.get_input_port(self._camera_inputs_indexes[camera_name][image_type])
                 )
 
-    def connect_point_clouds(self, to_point_cloud: Mapping[str, DepthImageToPointCloud], builder: DiagramBuilder):
-        for camera_name in self._camera_names:
-            builder.Connect(
-                to_point_cloud[camera_name].GetOutputPort(f"point_cloud"), 
-                self._pcd_inputs[camera_name]
-            )
+    # def connect_point_clouds(self, to_point_cloud: Mapping[str, DepthImageToPointCloud], builder: DiagramBuilder):
+    #     for camera_name in self._camera_names:
+    #         builder.Connect(
+    #             to_point_cloud[camera_name].GetOutputPort(f"point_cloud"), 
+    #             self.get_input_port(self._pcd_inputs_indexes[camera_name])
+    #         )
 
     def get_image(self, camera_name: str, image_type: str, camera_hub_context: Context):
-        return self._camera_inputs[camera_name][image_type].Eval(camera_hub_context)
+        return self.get_input_port(self._camera_inputs_indexes[camera_name][image_type]).Eval(camera_hub_context)
 
     def get_color_image(self, camera_name: str, camera_hub_context: Context):
         return self.get_image(camera_name, 'rgb_image', camera_hub_context)

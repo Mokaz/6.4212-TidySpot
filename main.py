@@ -82,7 +82,6 @@ try:
     camera_hub = builder.AddSystem(CameraHubSystem(station, camera_names, image_size))
     camera_hub.set_name("camera_hub")
     camera_hub.connect_cameras(station, builder)
-    camera_hub.connect_point_clouds(to_point_cloud, builder)
 
     # Add controller = InverseDynamicsController?
 
@@ -116,10 +115,10 @@ try:
     ### TESTZONE ###
     ################
 
-    # Display all camera images 
+    # # Display all camera images 
     # camera_hub.display_all_camera_images(camera_hub_context) 
 
-    # Display single image
+    # # Display single image
     # color_image = camera_hub.get_color_image("frontleft", camera_hub_context).data # Get color image from frontleft camera
     # plt.imshow(color_image)
     # plt.show()
