@@ -19,6 +19,8 @@ from navigation.path_planning import DynamicPathPlanner
 from utils import *
 from perception.ObjectDetector import ObjectDetector
 from grasping.GraspSelector import GraspSelector
+from grasping.PointCloudCropper import PointCloudCropper
+from grasping.Grasper import Grasper
 
 import os
 import sys
@@ -85,9 +87,24 @@ try:
     object_detector.set_name("object_detector")
     object_detector.connect_cameras(station, builder)
 
+    #### GRASPING ####
+
+    # Instantiate PointCloudCropper
+    point_cloud_cropper = builder.AddSystem(PointCloudCropper(camera_names))
+    point_cloud_cropper.set_name("point_cloud_cropper")
+    point_cloud_cropper.connect_ports(to_point_cloud, object_detector, builder)
+
     # Instantiate GraspSelector with use_anygrasp
     grasp_selector = builder.AddSystem(GraspSelector(use_anygrasp))
     grasp_selector.set_name("grasp_selector")
+    grasp_selector.connect_ports(point_cloud_cropper, builder)
+
+    # Instantiate Grasper
+    grasper = builder.AddSystem(Grasper())
+    grasper.set_name("grasper")
+    grasper.connect_ports(grasp_selector, builder)
+
+    ### PLANNER ###
 
     # Add point cloud processor for path planner
     point_cloud_processor = builder.AddSystem(PointCloudProcessor(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.1))
@@ -102,7 +119,7 @@ try:
     # Add Finite State Machine = TidySpotPlanner
     tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner))
     tidy_spot_planner.set_name("tidy_spot_planner")
-    tidy_spot_planner.connect_components(builder, station)
+    tidy_spot_planner.connect_components(builder, grasper, station)
 
     ### Build and visualize diagram ###
     diagram = builder.Build()
