@@ -14,7 +14,7 @@ from pydrake.all import (
 from typing import List, Tuple, Mapping
 import matplotlib.pyplot as plt
 
-class CameraHubSystem(LeafSystem):
+class ObjectDetector(LeafSystem):
     def __init__(self, station: Diagram, camera_names: List[str], image_size: Tuple[int, int]):
         LeafSystem.__init__(self)
 
@@ -26,7 +26,7 @@ class CameraHubSystem(LeafSystem):
                 for camera_names in camera_names
             }
 
-        # Declare input ports for the CameraHubSystem
+        # Declare input ports for the ObjectDetector
         self._camera_inputs_indexes = {
             camera_name: {
                 image_type: self.DeclareAbstractInputPort(

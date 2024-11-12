@@ -17,7 +17,7 @@ from navigation.map_helpers import PointCloudProcessor
 from navigation.path_planning import DynamicPathPlanner
 
 from utils import *
-from perception.CameraHubSystem import CameraHubSystem
+from perception.ObjectDetector import ObjectDetector
 from grasping.GraspSelector import GraspSelector
 
 import os
@@ -80,10 +80,10 @@ try:
     scene_graph = station.GetSubsystemByName("scene_graph")
     plant = station.GetSubsystemByName("plant")
 
-    # Instantiate CameraHubSystem with station and camera_names
-    camera_hub = builder.AddSystem(CameraHubSystem(station, camera_names, image_size))
-    camera_hub.set_name("camera_hub")
-    camera_hub.connect_cameras(station, builder)
+    # Instantiate ObjectDetector with station and camera_names
+    object_detector = builder.AddSystem(ObjectDetector(station, camera_names, image_size))
+    object_detector.set_name("object_detector")
+    object_detector.connect_cameras(station, builder)
 
     # Instantiate GraspSelector with use_anygrasp
     grasp_selector = builder.AddSystem(GraspSelector(use_anygrasp))
@@ -117,7 +117,7 @@ try:
     ### Get subsystem contexts ###
     station_context = station.GetMyMutableContextFromRoot(context)
     plant_context = plant.GetMyMutableContextFromRoot(context)
-    camera_hub_context = camera_hub.GetMyMutableContextFromRoot(context)
+    object_detector_context = object_detector.GetMyMutableContextFromRoot(context)
     # controller_context = controller.GetMyMutableContextFromRoot(context)
 
     ### Set initial Spot state ###
@@ -138,10 +138,10 @@ try:
     ################
 
     # # Display all camera images 
-    # camera_hub.display_all_camera_images(camera_hub_context) 
+    # object_detector.display_all_camera_images(object_detector_context) 
 
     # # Display single image
-    # color_image = camera_hub.get_color_image("frontleft", camera_hub_context).data # Get color image from frontleft camera
+    # color_image = object_detector.get_color_image("frontleft", object_detector_context).data # Get color image from frontleft camera
     # plt.imshow(color_image)
     # plt.show()
 
