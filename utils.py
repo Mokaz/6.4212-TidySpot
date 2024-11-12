@@ -48,33 +48,3 @@ def register_signal_handlers():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGTSTP, signal_handler)
-
-def add_anygrasp_to_path(anygrasp_path: str = None):
-    logger = logging.getLogger('drake')
-
-    if anygrasp_path is None:
-        anygrasp_path = Path.cwd() / 'anygrasp_sdk'
-    else:
-        anygrasp_path = Path(anygrasp_path).resolve()
-    
-    if anygrasp_path.is_dir():
-        anygrasp_str = str(anygrasp_path.resolve())
-        grasp_detection_str = str((anygrasp_path / 'grasp_detection').resolve())
-        
-        if anygrasp_str not in sys.path:
-            sys.path.append(anygrasp_str)
-            logger.info(f"Added '{anygrasp_str}' to sys.path")
-        else:
-            logger.debug(f"'{anygrasp_str}' is already in sys.path")
-        
-        if grasp_detection_str not in sys.path:
-            sys.path.append(grasp_detection_str)
-            logger.info(f"Added '{grasp_detection_str}' to sys.path")
-        else:
-            logger.debug(f"'{grasp_detection_str}' is already in sys.path")
-
-        return anygrasp_path
-    else:
-        error_msg = f"Error: '{anygrasp_path}' directory not found."
-        logger.error(error_msg)
-        raise FileNotFoundError(error_msg)
