@@ -96,6 +96,15 @@ class GraspSelector(LeafSystem):
         zmin, zmax = 0.2, 1.0   
         lims = [xmin, xmax, ymin, ymax, zmin, zmax]
 
+        mask = (
+            (points[:, 0] >= xmin) & (points[:, 0] <= xmax) &
+            (points[:, 1] >= ymin) & (points[:, 1] <= ymax) &
+            (points[:, 2] >= zmin) & (points[:, 2] <= zmax)
+        )
+
+        points = points[mask]
+        colors = colors[mask]
+
         self.run_anygrasp(points, colors, lims, visualize=True)
 
     def run_anygrasp(self, points, colors, lims, visualize=False):
