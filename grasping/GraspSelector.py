@@ -22,26 +22,20 @@ class GraspSelector(LeafSystem):
             self._setup_anygrasp(anygrasp_path)
 
         # Input ports
-        self._point_cloud_input_index = self.DeclareAbstractInputPort("point_cloud_input", AbstractValue.Make(PointCloud(0))).get_index() # TODO: Should this be preprocessed?
-        self.DeclareVectorInputPort("requested_grasp_selection", 1)
-
-        # Internal states
-        self._done_grasp_selection = self.DeclareDiscreteState(1)
+        self._point_cloud_input = self.DeclareAbstractInputPort("point_cloud_input", AbstractValue.Make(PointCloud(0)))
 
         # Output ports
-        self.DeclareStateOutputPort("done_grasp_selection", self._done_grasp_selection)
+        self.DeclareAbstractOutputPort("grasp_selection", lambda: AbstractValue.Make(RigidTransform()), self.SelectGrasp)
 
-        grasp_selection_port = self.DeclareAbstractOutputPort("grasp_selection", lambda: AbstractValue.Make(RigidTransform()), self.SelectGrasp)
-        grasp_selection_port.disable_caching_by_default() # TODO: Check if this is needed
-
-        # self.DeclarePeriodicDiscreteUpdateEvent(period_sec=0.1, offset_sec=0.0, update=self.Update)
-        
-    def Update(): # TODO: Implement this
-        pass
+    def connect_ports(self, point_cloud_cropper, builder):
+        builder.Connect(
+            point_cloud_cropper.GetOutputPort("cropped_point_cloud"),
+            self._point_cloud_input 
+        )
 
     def SelectGrasp(self, context: Context, output):
-        points = self.EvalAbstractInput(context, self._point_cloud_input_index).get_value().xyzs().T.astype(np.float32) # TODO: How to check if this is ready?
-        colors = self.EvalAbstractInput(context, self._point_cloud_input_index).get_value().rgbs().T.astype(np.float32) / 255.0
+        points = self._point_cloud_input.Eval(context).xyzs().T.astype(np.float32) 
+        colors = self._point_cloud_input.Eval(context).rgbs().T.astype(np.float32) / 255.0
         
         if self._use_anygrasp:
             # gg_pick = self.run_anygrasp(points, colors, lims)

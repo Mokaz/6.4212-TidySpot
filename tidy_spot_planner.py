@@ -62,11 +62,16 @@ class TidySpotPlanner(LeafSystem):
         self.DeclareVectorInputPort("object_detected", 1)
         self.DeclareVectorInputPort("path_planning_finished", 1)
 
+        self.DeclareVectorInputPort("grasp_completed", 1) # TODO: Add success/fail flag to data sent to this port
+
         # Output ports
         # self.DeclareAbstractOutputPort("X_WG", lambda: AbstractValue.Make(RigidTransform()), self.CalcGripperPose)
         self._spot_commanded_state_index = self.DeclareVectorOutputPort("spot_commanded_state", 20, self.CalcSpotState).get_index()
         self._path_planning_goal_output = self.DeclareVectorOutputPort("path_planning_goal", 3, self.CalcPathPlanningGoal).get_index()
         self._path_planning_position_output = self.DeclareVectorOutputPort("path_planning_position", 3, self.CalcPathPlanningPosition).get_index()
+    
+        # Output ports for various components
+        self.DeclareVectorOutputPort("request_grasp", 1, lambda context, output: print("Setting request_grasp output...")) # TODO: Replace lambda with function that sets output based on criteria (attempth count etc.)
 
         self._rng = np.random.default_rng()
 
@@ -82,7 +87,7 @@ class TidySpotPlanner(LeafSystem):
         self.path_planning_goal = (0, 0, 0)  # Goal for path planning
 
 
-    def connect_components(self, builder, station):
+    def connect_components(self, builder, grasper, station):
         builder.Connect(station.GetOutputPort("spot.state_estimated"), self.get_input_port(self._spot_body_state_index))
         builder.Connect(self.get_output_port(self._spot_commanded_state_index), station.GetInputPort("spot.desired_state"))
 
@@ -92,6 +97,10 @@ class TidySpotPlanner(LeafSystem):
         builder.Connect(self.get_output_port(self._path_planning_position_output), self.dynamic_path_planner.GetInputPort("robot_position"))
         builder.Connect(self.dynamic_path_planner.GetOutputPort("done_astar"), self.GetInputPort("path_planning_finished"))
         # builder.Connect(self.dynamic_path_planner.GetOutputPort("next_position"), self.get_input_port(self._path_planning_desired_index))
+
+        # Connect the grasper to the FSM planner
+        builder.Connect(self.GetOutputPort("request_grasp"), grasper.GetInputPort("do_grasp"))
+        builder.Connect(grasper.GetOutputPort("done_grasp"), self.GetInputPort("grasp_completed"))
 
     def get_spot_state_input_port(self):
         return self.GetInputPort("body_poses")

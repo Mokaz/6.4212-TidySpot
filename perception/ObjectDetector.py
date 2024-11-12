@@ -26,7 +26,7 @@ class ObjectDetector(LeafSystem):
                 for camera_names in camera_names
             }
 
-        # Declare input ports for the ObjectDetector
+        # Input ports
         self._camera_inputs_indexes = {
             camera_name: {
                 image_type: self.DeclareAbstractInputPort(
@@ -50,6 +50,29 @@ class ObjectDetector(LeafSystem):
         #     ).get_index()
         #     for camera_name in camera_names
         # }
+
+        # Internal states
+
+        # Output ports
+        self.DeclareAbstractOutputPort(
+            "segmentation_data",
+            lambda: AbstractValue.Make({
+                "segmentation_mask": np.array([]),
+                "camera_name": ""
+            }),
+            self.GetClosestObjectSegmentation
+        )
+
+    def GetClosestObjectSegmentation(self, context: Context, output):
+        # run_GroundedSAM(), or fetch object segmentations from internal state # TODO: implement this
+
+        closest_object = np.array([0]) # TODO: Implement this
+        camera_name = ""
+
+        output.set_value({
+            "segmentation_mask": closest_object,  # TODO: Implement this
+            "camera_name": camera_name
+        })
 
     def connect_cameras(self, station: Diagram, builder: DiagramBuilder):
         for camera_name in self._camera_names:
