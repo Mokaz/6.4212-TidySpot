@@ -33,7 +33,7 @@ def make_spot_controller(
         StateInterpolatorWithDiscreteDerivative(
             # TODO: split the control of end effector (the gripper) from the
             # control of the base of Spot
-            num_positions=spot_plant.num_positions(),
+            num_positions=10,
             time_step=0.05,
             suppress_initial_transient=True,
         ),
