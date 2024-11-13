@@ -41,7 +41,7 @@ logger = logging.getLogger('drake')
 logger.addFilter(DrakeWarningFilter())
 
 # Use AnyGrasp (TODO: add to args later)
-use_anygrasp = True
+use_anygrasp = False
 
 try:
     ### Start the visualizer ###
@@ -104,7 +104,7 @@ try:
     controller = builder.AddSystem(SpotController(plant, use_teleop=False, meshcat=meshcat))
 
     # Add Finite State Machine = TidySpotPlanner
-    tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner))
+    tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner, controller))
     tidy_spot_planner.set_name("tidy_spot_planner")
     tidy_spot_planner.connect_components(builder, station)
 
