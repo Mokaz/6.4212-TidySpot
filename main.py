@@ -15,6 +15,7 @@ from manipulation.station import (
 from tidy_spot_planner import TidySpotPlanner
 from navigation.map_helpers import PointCloudProcessor
 from navigation.path_planning import DynamicPathPlanner
+from controller.spot_controller import SpotController
 
 from utils import *
 from perception.ObjectDetector import ObjectDetector
@@ -60,7 +61,7 @@ try:
     for camera_name, camera_config in scenario.cameras.items():
         camera_config.depth = True
         camera_names.append(camera_name)
-        
+
         if image_size is None:
             image_size = (camera_config.width, camera_config.height)
 
@@ -98,6 +99,9 @@ try:
     dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, point_cloud_processor, np.array([0,0,0]), resolution=0.1, robot_radius=0.1))
     dynamic_path_planner.set_name("dynamic_path_planner")
     dynamic_path_planner.connect_processor(station, builder)
+
+    # Add controller
+    controller = builder.AddSystem(SpotController(plant, use_teleop=False, meshcat=meshcat))
 
     # Add Finite State Machine = TidySpotPlanner
     tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner))
@@ -137,8 +141,8 @@ try:
     ### TESTZONE ###
     ################
 
-    # # Display all camera images 
-    # object_detector.display_all_camera_images(object_detector_context) 
+    # # Display all camera images
+    # object_detector.display_all_camera_images(object_detector_context)
 
     # # Display single image
     # color_image = object_detector.get_color_image("frontleft", object_detector_context).data # Get color image from frontleft camera

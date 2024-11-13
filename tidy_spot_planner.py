@@ -36,10 +36,11 @@ class SpotState(Enum):
 
 # Define the high-level planner for Spot
 class TidySpotPlanner(LeafSystem):
-    def __init__(self, plant, dynamic_path_planner):
+    def __init__(self, plant, dynamic_path_planner, controller):
         LeafSystem.__init__(self)
 
         self.dynamic_path_planner = dynamic_path_planner
+        self.controller = controller
 
         # Spot's internal planning states
         self._state_index = self.DeclareAbstractState(AbstractValue.Make(SpotState.IDLE))
@@ -65,6 +66,7 @@ class TidySpotPlanner(LeafSystem):
         # Output ports
         # self.DeclareAbstractOutputPort("X_WG", lambda: AbstractValue.Make(RigidTransform()), self.CalcGripperPose)
         self._spot_commanded_state_index = self.DeclareVectorOutputPort("spot_commanded_state", 20, self.CalcSpotState).get_index()
+        self._target_base_position = self.DeclareVectorOutputPort("target_base_position", 20, self.CalcSpotState).get_index()
         self._path_planning_goal_output = self.DeclareVectorOutputPort("path_planning_goal", 3, self.CalcPathPlanningGoal).get_index()
         self._path_planning_position_output = self.DeclareVectorOutputPort("path_planning_position", 3, self.CalcPathPlanningPosition).get_index()
 
@@ -84,7 +86,7 @@ class TidySpotPlanner(LeafSystem):
 
     def connect_components(self, builder, station):
         builder.Connect(station.GetOutputPort("spot.state_estimated"), self.get_input_port(self._spot_body_state_index))
-        builder.Connect(self.get_output_port(self._spot_commanded_state_index), station.GetInputPort("spot.desired_state"))
+        # builder.Connect(self.get_output_port(self._spot_commanded_state_index), station.GetInputPort("spot.desired_state"))
 
 
         # Connect the path planner to the FSM planner
@@ -92,6 +94,9 @@ class TidySpotPlanner(LeafSystem):
         builder.Connect(self.get_output_port(self._path_planning_position_output), self.dynamic_path_planner.GetInputPort("robot_position"))
         builder.Connect(self.dynamic_path_planner.GetOutputPort("done_astar"), self.GetInputPort("path_planning_finished"))
         # builder.Connect(self.dynamic_path_planner.GetOutputPort("next_position"), self.get_input_port(self._path_planning_desired_index))
+
+        # connect the controller to the spot input port
+        builder.Connect(self.controller.get_output_port(), station.GetInputPort("spot.desired_state"))
 
     def get_spot_state_input_port(self):
         return self.GetInputPort("body_poses")
@@ -105,6 +110,18 @@ class TidySpotPlanner(LeafSystem):
 
     def _get_explore_completed(self, context, state):
         return self.get_path_planning_finished_input_port().Eval(context)[0]
+
+    def _set_target_base_position(self, context, output):
+        (table_idx, camera_idx) = self._get_looking_inds(context)
+        base_pose = self._camera_pos_list[table_idx, camera_idx, :].copy()
+        if self._get_current_action(context) == Action.STEP_FORWARD:
+            # step forward in current direction
+            R = RotationMatrix.MakeZRotation(base_pose[2])
+            step = R.multiply([0.2, 0, 0])
+            base_pose[:2] += step[:2]  # ignore height in z direction
+        if self._get_current_action(context) == Action.CARRY_BACK:
+            base_pose = self._final_position
+        output.SetFromVector(base_pose)
 
 
     def Update(self, context, state):
@@ -135,14 +152,15 @@ class TidySpotPlanner(LeafSystem):
                         int(self._state_index)
                     ).set_value(SpotState.DETECT_OBJECT)
                 else:
-                    print("Failed to detect object. Returning to EXPLORE.")
+                    print("Failed to detect object. Calculate new point for EXPLORE.")
                     new_area = self.explore_environment()
                     state.get_mutable_abstract_state(
                         int(self._state_index)
                     ).set_value(SpotState.IDLE)
             else:
                 print(f"Exploring area at {self.path_planning_goal}")
-                
+                # make the controller walk the robot to the next position
+
 
         elif mode == SpotState.DETECT_OBJECT:
             if self.detected_objects:
