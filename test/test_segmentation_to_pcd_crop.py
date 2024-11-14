@@ -1,3 +1,6 @@
+import sys
+import os
+
 from pydrake.all import (
     Simulator,
     StartMeshcat,
@@ -44,7 +47,61 @@ logger.addFilter(DrakeWarningFilter())
 
 # Use AnyGrasp (TODO: add to args later)
 use_anygrasp = False
-use_grounded_sam = False
+use_grounded_sam = True
+
+def segmentation_test_directives():
+    return """
+directives:
+- add_model:
+    name: ground_plane
+    file: package://TidySpot_objects/ground_plane.sdf
+- add_weld:
+    parent: world
+    child: ground_plane::ground_plane_center
+- add_model:
+    name: north_wall
+    file: package://TidySpot_objects/wall.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: north_wall::wall_bottomcenter
+    X_PC:
+        translation: [4.5, 0, -0.047]
+        rotation: !Rpy { deg: [0, 90, 0]}
+- add_model:
+    name: south_wall
+    file: package://TidySpot_objects/wall.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: south_wall::wall_bottomcenter
+    X_PC:
+        translation: [-5.5, 0, -0.047]
+        rotation: !Rpy { deg: [0, 90, 0]}
+- add_model:
+    name: east_wall
+    file: package://TidySpot_objects/wall.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: east_wall::wall_bottomcenter
+    X_PC:
+        translation: [0, 4.5, -0.047]
+        rotation: !Rpy { deg: [0, 90, 90]}
+- add_model:
+    name: west_wall
+    file: package://TidySpot_objects/wall.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: west_wall::wall_bottomcenter
+    X_PC:
+        translation: [0, -5.5, -0.047]
+        rotation: !Rpy { deg: [0, 90, 90]}
+- add_model:
+    name: cracker
+    file: package://manipulation/hydro/003_cracker_box.sdf
+    default_free_body_pose:
+        base_link_cracker:
+            translation: [1, 0, 0.5]
+            rotation: !Rpy { deg: [90, 180, -90]}
+"""
 
 try:
     ### Start the visualizer ###
@@ -69,7 +126,7 @@ try:
             image_size = (camera_config.width, camera_config.height)
 
     ### Add objects to scene ###
-    scenario = AppendDirectives(scenario, filename="objects/added_object_directives.yaml")
+    scenario = AppendDirectives(scenario, data=segmentation_test_directives())
 
     station = builder.AddSystem(MakeHardwareStation(
         scenario=scenario,
@@ -108,23 +165,10 @@ try:
 
     ### PLANNER ###
 
-    # Add point cloud processor for path planner
-    point_cloud_processor = builder.AddSystem(PointCloudProcessor(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.1))
-    point_cloud_processor.set_name("point_cloud_processor")
-    point_cloud_processor.connect_point_clouds(station, builder)
-
-    # Add path planner and mapper
-    dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, point_cloud_processor, np.array([0,0,0]), resolution=0.1, robot_radius=0.1))
-    dynamic_path_planner.set_name("dynamic_path_planner")
-    dynamic_path_planner.connect_processor(station, builder)
-
-    # Add controller
-    controller = builder.AddSystem(SpotController(plant, use_teleop=False, meshcat=meshcat))
-
-    # Add Finite State Machine = TidySpotPlanner
-    tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner, controller))
-    tidy_spot_planner.set_name("tidy_spot_planner")
-    tidy_spot_planner.connect_components(builder, grasper, station)
+    # # Add Finite State Machine = TidySpotPlanner
+    # tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner, controller))
+    # tidy_spot_planner.set_name("tidy_spot_planner")
+    # tidy_spot_planner.connect_components(builder, grasper, station)
 
     ### Build and visualize diagram ###
     diagram = builder.Build()
@@ -152,7 +196,7 @@ try:
 
     meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 
-    # meshcat.StartRecording()
+    meshcat.StartRecording()
     simulator.AdvanceTo(2.0)
 
     ################
@@ -167,11 +211,36 @@ try:
     # plt.imshow(color_image)
     # plt.show()
 
+    def display_front_images(object_detector, context):
+        frontleft_image = np.rot90(object_detector.get_color_image("frontleft", context).data, k=-1)
+        frontright_image = np.rot90(object_detector.get_color_image("frontright", context).data, k=-1)
+
+        fig, axes = plt.subplots(1, 2, figsize=(12, 6))
+        axes[0].imshow(frontright_image)
+        axes[0].set_title("Front Right Camera")
+        axes[0].axis('off')
+
+        axes[1].imshow(frontleft_image)
+        axes[1].set_title("Front Left Camera")
+        axes[1].axis('off')
+
+        plt.show()
+
+    
+    # display_front_images(object_detector, object_detector_context)
+
+    # # Test segmentation on frontleft camera
+    # object_detector.test_segmentation_frontleft(object_detector_context)
+
+    # # Test cropping from segmentation on frontleft camera
+    pcd_cropper_context = point_cloud_cropper.GetMyMutableContextFromRoot(context)
+    point_cloud_cropper.test_frontleft_crop_from_segmentation(pcd_cropper_context)
+    
     # # Test anygrasp on frontleft camera
     # grasp_selector.test_anygrasp_frontleft_pcd(to_point_cloud, context)
 
     # # Keep meshcat alive
-    # meshcat.PublishRecording()
+    meshcat.PublishRecording()
 
     while not meshcat.GetButtonClicks("Stop meshcat"):
         pass
