@@ -15,6 +15,8 @@ from manipulation.station import (
     MakeHardwareStation,
 )
 
+from manipulation.meshcat_utils import AddMeshcatTriad
+
 from tidy_spot_planner import TidySpotPlanner
 from navigation.map_helpers import PointCloudProcessor
 from navigation.path_planning import DynamicPathPlanner
@@ -35,9 +37,6 @@ import open3d as o3d
 from PIL import Image
 from matplotlib import pyplot as plt
 
-import sys
-import torch
-
 # CUDA memory management
 register_signal_handlers()
 
@@ -46,7 +45,7 @@ logger = logging.getLogger('drake')
 logger.addFilter(DrakeWarningFilter())
 
 # Use AnyGrasp (TODO: add to args later)
-use_anygrasp = False
+use_anygrasp = True
 use_grounded_sam = True
 
 def segmentation_test_directives():
@@ -233,11 +232,18 @@ try:
     # object_detector.test_segmentation_frontleft(object_detector_context)
 
     # # Test cropping from segmentation on frontleft camera
-    pcd_cropper_context = point_cloud_cropper.GetMyMutableContextFromRoot(context)
-    point_cloud_cropper.test_frontleft_crop_from_segmentation(pcd_cropper_context)
+    # pcd_cropper_context = point_cloud_cropper.GetMyMutableContextFromRoot(context)
+    # point_cloud_cropper.test_frontleft_crop_from_segmentation(pcd_cropper_context)
     
     # # Test anygrasp on frontleft camera
     # grasp_selector.test_anygrasp_frontleft_pcd(to_point_cloud, context)
+
+    # Test anygrasp on segmented point cloud
+    # grasp_selector.test_anygrasp_frontleft_segmented_pcd(grasp_selector.GetMyMutableContextFromRoot(context))
+
+    # Test grasp selection
+    grasp_pose = grasper.GetGraspSelection(grasper.GetMyMutableContextFromRoot(context))
+    AddMeshcatTriad(meshcat, "grasp_pose", length=0.1, radius=0.006, X_PT=grasp_pose)
 
     # # Keep meshcat alive
     meshcat.PublishRecording()

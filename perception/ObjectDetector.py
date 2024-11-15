@@ -13,6 +13,8 @@ from pydrake.all import (
 )
 from typing import List, Tuple
 import matplotlib.pyplot as plt
+import torchvision
+torchvision.disable_beta_transforms_warning()
 
 from perception.GroundedSAM import GroundedSAM
 
@@ -72,10 +74,13 @@ class ObjectDetector(LeafSystem):
         segmentation_mask = self.grounded_sam.detect_and_segment_objects(rgb_image)
         camera_name = "frontleft" # Temp
 
+
         output.set_value({
             "segmentation_mask": segmentation_mask,  # TODO: Implement this
             "camera_name": camera_name
         })
+
+        # print("ObjectDetector: GetClosestObjectSegmentation complete")
 
     def test_segmentation_frontleft(self, object_detector_context: Context):
         rgba_image = self.get_color_image("frontleft", object_detector_context).data

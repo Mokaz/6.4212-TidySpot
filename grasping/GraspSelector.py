@@ -9,8 +9,10 @@ from pydrake.all import (
     LeafSystem,
     PointCloud,
     DepthImageToPointCloud,
+    RotationMatrix
 )
 from grasping.grasp_utils import add_anygrasp_to_path
+from grasping.AnyGraspHandler import AnyGraspHandler
 import open3d as o3d
 from typing import List, Tuple, Mapping
 
@@ -18,8 +20,10 @@ class GraspSelector(LeafSystem):
     def __init__(self, use_anygrasp: bool, anygrasp_path: str = os.path.join(os.getcwd(), "anygrasp_sdk")):
         LeafSystem.__init__(self)
         self._use_anygrasp = use_anygrasp
+        self.anygrasp_handler = None
+
         if use_anygrasp:
-            self._setup_anygrasp(anygrasp_path)
+            self.anygrasp_handler = AnyGraspHandler(anygrasp_path)
 
         # Input ports
         self._point_cloud_input = self.DeclareAbstractInputPort("point_cloud_input", AbstractValue.Make(PointCloud(0)))
@@ -34,45 +38,120 @@ class GraspSelector(LeafSystem):
         )
 
     def SelectGrasp(self, context: Context, output):
-        points = self._point_cloud_input.Eval(context).xyzs().T.astype(np.float32) 
-        colors = self._point_cloud_input.Eval(context).rgbs().T.astype(np.float32) / 255.0
+        point_cloud = self._point_cloud_input.Eval(context)
+        points = point_cloud.xyzs().T.astype(np.float32) 
+        colors = point_cloud.rgbs().T.astype(np.float32) / 255.0
+
+        valid_mask = np.isfinite(points).all(axis=1)
+
+        points = points[valid_mask]
+        colors = colors[valid_mask] 
+
+        if points.shape[0] == 0:
+            print("ANYGRASP: No points in the specified limits.")
+            return
+        
+        # self.visualize_pcd_with_grasps(points, colors)
         
         if self._use_anygrasp:
-            # gg_pick = self.run_anygrasp(points, colors, lims)
-            output.set_value(RigidTransform())
-            pass
+            gg_ten_best = self.anygrasp_handler.run_anygrasp(points, colors, lims=None, visualize=False) # TODO: Implement more filtering
+            g_best = gg_ten_best[0]
+            output.set_value(RigidTransform(RotationMatrix(g_best.rotation_matrix), g_best.translation))
 
-    def _setup_anygrasp(self, anygrasp_path: str):
-        try:
-            add_anygrasp_to_path(anygrasp_path)
+    def test_anygrasp_frontleft_segmented_pcd(self, grasp_selector_context: Context):
+        frontleft_pcd = self._point_cloud_input.Eval(grasp_selector_context)
+        points = frontleft_pcd.xyzs().T.astype(np.float32)         # Shape: (N, 3)
+        colors = frontleft_pcd.rgbs().T.astype(np.float32) / 255.0
 
-            from anygrasp_sdk.grasp_detection.gsnet import AnyGrasp
+        valid_mask = np.isfinite(points).all(axis=1)
 
-            cfgs = SimpleNamespace(
-                checkpoint_path=os.path.join(anygrasp_path, 'grasp_detection', 'checkpoints', 'checkpoint_detection.tar'),
-                max_gripper_width=1.0,
-                gripper_height=0.03,
-                top_down_grasp=False,  # Set to True if needed
-                debug=False
-            )
+        points = points[valid_mask]
+        colors = colors[valid_mask] 
 
-            self.anygrasp = AnyGrasp(cfgs)
-            self.anygrasp.load_net()
+        if points.shape[0] == 0:
+            print("ANYGRASP: No points in the specified limits.")
+            return
+
+        # self.visualize_pcd_with_grasps(points, colors)
+
+        # Limits for the point cloud (optional)
+
+        xmin, xmax = np.min(points[:, 0]), np.max(points[:, 0])
+        ymin, ymax = np.min(points[:, 1]), np.max(points[:, 1])
+        zmin, zmax = np.min(points[:, 2]), np.max(points[:, 2])
+
+        z_mid = (zmax - zmin) / 2
+
+        zmin, zmax = zmin + z_mid, zmax + z_mid
+
+        def create_xy_plane(z, size, resolution):
+            # Generate grid points
+            x = np.linspace(-size, size, resolution)
+            y = np.linspace(-size, size, resolution)
+            xx, yy = np.meshgrid(x, y)
+            zz = np.full_like(xx, z)
+            
+            # Flatten the arrays and combine into vertex coordinates
+            vertices = np.vstack((xx.flatten(), yy.flatten(), zz.flatten())).T
+            
+            # Create triangles
+            triangles = []
+            for i in range(resolution - 1):
+                for j in range(resolution - 1):
+                    # Calculate the index of the four corners of the current grid cell
+                    idx = i * resolution + j
+                    idx_right = idx + 1
+                    idx_down = idx + resolution
+                    idx_down_right = idx_down + 1
+                    
+                    # Define two triangles for each grid cell
+                    triangles.append([idx, idx_down, idx_right])
+                    triangles.append([idx_right, idx_down, idx_down_right])
+            
+            triangles = np.array(triangles)
+            
+            # Create the mesh
+            mesh = o3d.geometry.TriangleMesh()
+            mesh.vertices = o3d.utility.Vector3dVector(vertices)
+            mesh.triangles = o3d.utility.Vector3iVector(triangles)
+            
+            # Optionally compute normals for better visualization
+            mesh.compute_vertex_normals()
+            
+            return mesh
+
+        zmin_plane = create_xy_plane(zmin, 1, 10)
+        zmax_plane = create_xy_plane(zmax, 1, 10)
+
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(points)
+
+        if colors is not None:
+            pcd.colors = o3d.utility.Vector3dVector(colors)
         
-        except ImportError as e:
-            logging.error("AnyGrasp module not found. Ensure 'anygrasp_sdk' is correctly installed.")
-            raise e
-        except FileNotFoundError as e:
-            logging.error(f"Checkpoint file not found: {e}")
-            raise e
-        except Exception as e:
-            logging.error(f"Failed to initialize AnyGrasp: {e}")
-            raise e
+        geometries = [pcd, zmin_plane, zmax_plane]
+
+        axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
+        geometries.extend([axis])
+        o3d.visualization.draw_geometries(geometries)
+
+        lims = [xmin, xmax, ymin, ymax, zmin, zmax]
+
+        self.anygrasp_handler.run_anygrasp(points, colors, lims, flip_before_calc=True, visualize=True)
 
     def test_anygrasp_frontleft_pcd(self, to_point_cloud: Mapping[str, DepthImageToPointCloud], simulator_context: Context):
         frontleft_pcd = to_point_cloud["frontleft"].get_output_port().Eval(
             to_point_cloud["frontleft"].GetMyContextFromRoot(simulator_context)
         )
+        # X_WC = to_point_cloud["frontleft"].camera_pose_input_port().Eval(
+        #     to_point_cloud["frontleft"].GetMyContextFromRoot(simulator_context)
+        # )
+
+        # R_WC = X_WC.rotation()
+
+        # R_WC_new = R_WC.multiply(RotationMatrix.MakeYRotation(-np.pi / 2))
+
+        # X_WC.set_rotation(R_WC_new)
 
         points = frontleft_pcd.xyzs().T.astype(np.float32)         # Shape: (N, 3)
         colors = frontleft_pcd.rgbs().T.astype(np.float32) / 255.0 # Shape: (N, 3)
@@ -84,10 +163,10 @@ class GraspSelector(LeafSystem):
         
         # self.visualize_pcd_with_grasps(points, colors)
 
-        # Crops the point cloud for anygrasp, currently arbitrary values
-        xmin, xmax = 0, 2  
+        # Crops the point cloud for anygrasp, crackers in front
+        xmin, xmax = 0, 1  
         ymin, ymax = -1, 1  
-        zmin, zmax = 0.2, 1.0   
+        zmin, zmax = 0, 1
         lims = [xmin, xmax, ymin, ymax, zmin, zmax]
 
         mask = (
@@ -99,33 +178,17 @@ class GraspSelector(LeafSystem):
         points = points[mask]
         colors = colors[mask]
 
-        self.run_anygrasp(points, colors, lims, visualize=True)
+        if points.shape[0] == 0:
+            print("ANYGRASP: No points in the specified limits.")
+            return
+        
+        # self.visualize_pcd_with_grasps(points, colors)
 
-    def run_anygrasp(self, points, colors, lims, visualize=False):
-        if not hasattr(self, 'anygrasp') or self.anygrasp is None:
-            raise ValueError("AnyGrasp not initialized. Ensure 'use_anygrasp' is set to True.")
+        # points = X_WC.inverse().multiply(points.T).T.astype(np.float32)
 
-        gg, cloud = self.anygrasp.get_grasp(
-            points,
-            colors,
-            lims=lims,
-            apply_object_mask=True,
-            dense_grasp=False,
-            collision_detection=True
-        )
+        # self.visualize_pcd_with_grasps(points, colors)
 
-        if len(gg) == 0:
-            print('No Grasp detected after collision detection!') # TODO: Implement retry mechanism
-        else:
-            gg = gg.nms().sort_by_score() # TODO: Grasp filtering based on orientation compared to Spot
-            gg_pick = gg[0:20]
-            print(gg_pick.scores)
-            print('Top grasp score:', gg_pick[0].score)
-
-        if visualize:
-            self.visualize_pcd_with_grasps(points, colors, gg) # TODO: Send to meshcat?
-
-        return gg_pick[0]
+        self.anygrasp_handler.run_anygrasp(points, colors, visualize=True)
 
     def visualize_pcd_with_grasps(self, points, colors=None, gg=None):
         pcd = o3d.geometry.PointCloud()
@@ -139,5 +202,8 @@ class GraspSelector(LeafSystem):
         if gg is not None:
             grippers = gg.to_open3d_geometry_list()
             geometries.extend(grippers)
-        
+
+        # Add coordinate axis for better visualization
+        axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1, origin=[0, 0, 0])
+        geometries.extend([axis])
         o3d.visualization.draw_geometries(geometries)

@@ -42,7 +42,49 @@ class PointCloudCropper(LeafSystem):
         self.DeclareAbstractOutputPort(
             "cropped_point_cloud",
             lambda: AbstractValue.Make(PointCloud(0)),
-            self.CropPointcloud
+            self.CropPointCloudBySegmentation
+        )
+
+    def CropPointCloudBySegmentation(self, context: Context, output):
+        segmentation_data = self._segmentation_data_input.Eval(context)
+        segmentation_mask, camera_name = segmentation_data['segmentation_mask'], segmentation_data['camera_name']
+        segmentation_mask = segmentation_mask.flatten()
+
+        if segmentation_mask.size == 0:
+            output.set_value(PointCloud(0))
+            print("CropPointcloud: No segmentation mask found")
+            return
+        
+        point_cloud = self.get_input_port(self._pcd_inputs_indexes[camera_name]).Eval(context)
+
+        points = point_cloud.xyzs().T.astype(np.float32)
+        colors = point_cloud.rgbs().T.astype(np.float32) / 255.0
+
+        segmented_points = points[segmentation_mask]
+        segmented_colors = colors[segmentation_mask]
+
+        valid_mask = np.isfinite(segmented_points).all(axis=1)
+        segmented_points = segmented_points[valid_mask]
+        segmented_colors = segmented_colors[valid_mask]
+
+        fields = Fields(BaseField.kXYZs | BaseField.kRGBs)
+        segmented_point_cloud = PointCloud(segmented_points.shape[0], fields)
+        segmented_point_cloud.mutable_xyzs()[:] = segmented_points.T
+        segmented_point_cloud.mutable_rgbs()[:] = (segmented_colors.T * 255.0).astype(np.uint8)
+
+        output.set_value(segmented_point_cloud)
+        # print("PointCloudCropper: CropPointCloudBySegmentation point cloud set")
+
+    def connect_ports(self, to_point_cloud: Mapping[str, DepthImageToPointCloud], object_detector, builder: DiagramBuilder):
+        for camera_name in self._camera_names:
+            builder.Connect(
+                to_point_cloud[camera_name].GetOutputPort(f"point_cloud"), 
+                self.get_input_port(self._pcd_inputs_indexes[camera_name])
+            )
+
+        builder.Connect(
+            object_detector.GetOutputPort("segmentation_data"),
+            self._segmentation_data_input
         )
 
     def test_frontleft_crop_from_segmentation(self, pcd_cropper_context: Context):
@@ -57,7 +99,6 @@ class PointCloudCropper(LeafSystem):
             return
 
         point_cloud = self.get_input_port(self._pcd_inputs_indexes[camera_name]).Eval(pcd_cropper_context)
-
 
         # Get the points and colors
         points = point_cloud.xyzs().T.astype(np.float32)
@@ -92,50 +133,6 @@ class PointCloudCropper(LeafSystem):
         segmented_colors_viz = segmented_colors[valid_mask]
 
         self.visualize_pcd(segmented_points_viz, segmented_colors_viz)
-
-
-    def CropPointcloud(self, context: Context, output):
-        segmentation_data = self._segmentation_data_input.Eval(context)
-        segmentation_mask, camera_name = segmentation_data['segmentation_mask'], segmentation_data['camera_name']
-
-        if segmentation_mask.size == 0:
-            output.set_value(PointCloud(0))
-            print("CropPointcloud: No segmentation mask found")
-            return
-        
-        point_cloud = self.EvalAbstractInput(context, self._pcd_inputs_indexes[camera_name])
-
-        # Get the points and colors
-        points = point_cloud.xyzs().T.astype(np.float32)
-        colors = point_cloud.rgbs().T.astype(np.float32) / 255.0
-
-        valid_mask = np.isfinite(points).all(axis=1)
-
-        points = points[valid_mask]
-        colors = colors[valid_mask]
-
-        # Get the segmented points
-        segmented_points = points[segmentation_mask]
-        segmented_colors = colors[segmentation_mask]
-
-        # Set the segmented point cloud
-        segmented_point_cloud = PointCloud(0)
-        segmented_point_cloud.set_xyzs(segmented_points.T)
-        segmented_point_cloud.set_rgbs(segmented_colors.T * 255.0)
-
-        output.set_value(segmented_point_cloud)
-
-    def connect_ports(self, to_point_cloud: Mapping[str, DepthImageToPointCloud], object_detector, builder: DiagramBuilder):
-        for camera_name in self._camera_names:
-            builder.Connect(
-                to_point_cloud[camera_name].GetOutputPort(f"point_cloud"), 
-                self.get_input_port(self._pcd_inputs_indexes[camera_name])
-            )
-
-        builder.Connect(
-            object_detector.GetOutputPort("segmentation_data"),
-            self._segmentation_data_input
-        )
 
     def visualize_pcd(self, points, colors=None):
         pcd = o3d.geometry.PointCloud()

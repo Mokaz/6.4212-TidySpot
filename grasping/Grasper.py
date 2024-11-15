@@ -47,3 +47,6 @@ class Grasper(LeafSystem):
             grasp_selector.GetOutputPort("grasp_selection"),
             self._grasp_pose_input
         )
+
+    def GetGraspSelection(self, grasper_context: Context) -> RigidTransform:
+        return self._grasp_pose_input.Eval(grasper_context)

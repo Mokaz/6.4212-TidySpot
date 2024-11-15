@@ -8,10 +8,15 @@ import supervision as sv
 import torchvision
 torchvision.disable_beta_transforms_warning()
 
+import warnings
+warnings.filterwarnings("ignore", message="annotate is deprecated:*")
+warnings.filterwarnings("ignore", message="torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument.*")
+
 class GroundedSAM:
     def __init__(self, groundedsam_path: str):
         self.DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self._setup_groundedsam(groundedsam_path)
+        print("GroundedSAM initialized successfully.")
 
     def _setup_groundedsam(self, groundedsam_path: str):
         # GroundingDINO config and checkpoint
@@ -72,7 +77,7 @@ class GroundedSAM:
         cv2.imwrite("groundingdino_annotated_image.jpg", annotated_frame)
 
         # NMS post-process
-        print(f"Before NMS: {len(detections.xyxy)} boxes")
+        # print(f"Before NMS: {len(detections.xyxy)} boxes")
         nms_idx = torchvision.ops.nms(
             torch.from_numpy(detections.xyxy),
             torch.from_numpy(detections.confidence),
@@ -83,9 +88,7 @@ class GroundedSAM:
         detections.confidence = detections.confidence[nms_idx]
         detections.class_id = detections.class_id[nms_idx]
 
-        print("detections.class_id:", detections.class_id)
-
-        print(f"After NMS: {len(detections.xyxy)} boxes")
+        # print(f"After NMS: {len(detections.xyxy)} boxes")
 
         # Prompting SAM with detected boxes
         def segment(sam_predictor: SamPredictor, image: np.ndarray, xyxy: np.ndarray) -> np.ndarray:
