@@ -126,6 +126,8 @@ class PointCloudProcessor(LeafSystem):
     def mark_robot_footprint_as_free(self):
         """
         Marks the grid cells corresponding to the robot's footprint as free space.
+
+        # TODO: make this the actual footprint of the robot
         """
         center_x, center_y = self.grid_map.shape[0] // 2, self.grid_map.shape[1] // 2
         radius_in_cells = int(self.robot_radius / self.resolution)
