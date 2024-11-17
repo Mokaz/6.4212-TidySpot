@@ -36,11 +36,11 @@ class SpotState(Enum):
 
 # Define the high-level planner for Spot
 class TidySpotPlanner(LeafSystem):
-    def __init__(self, plant, dynamic_path_planner, controller):
+    def __init__(self, plant, dynamic_path_planner):
         LeafSystem.__init__(self)
 
         self.dynamic_path_planner = dynamic_path_planner
-        self.controller = controller
+        # self.controller = controller
 
         # Spot's internal planning states
         self._state_index = self.DeclareAbstractState(AbstractValue.Make(SpotState.IDLE))
@@ -71,6 +71,8 @@ class TidySpotPlanner(LeafSystem):
         self._spot_commanded_state_index = self.DeclareVectorOutputPort("spot_commanded_state", 20, self.CalcSpotState).get_index()
 
         # Declare output ports for the path planner
+        self.use_path_planner = self.DeclareDiscreteState(1)
+        self.DeclareStateOutputPort("use_path_planner", self.use_path_planner)
         self._target_base_position = self.DeclareVectorOutputPort("target_base_position", 3, self.CalcSpotState).get_index()
         self._path_planning_goal_output = self.DeclareVectorOutputPort("path_planning_goal", 3, self.CalcPathPlanningGoal).get_index()
         self._path_planning_position_output = self.DeclareVectorOutputPort("path_planning_position", 3, self.CalcPathPlanningPosition).get_index()
@@ -105,6 +107,7 @@ class TidySpotPlanner(LeafSystem):
         builder.Connect(self.get_output_port(self._path_planning_goal_output), self.dynamic_path_planner.GetInputPort("goal"))
         builder.Connect(self.get_output_port(self._path_planning_position_output), self.dynamic_path_planner.GetInputPort("robot_position"))
         builder.Connect(self.dynamic_path_planner.GetOutputPort("done_astar"), self.GetInputPort("path_planning_finished"))
+        builder.Connect(self.GetOutputPort("use_path_planner"), self.dynamic_path_planner.GetInputPort("execute_path"))
         # builder.Connect(self.dynamic_path_planner.GetOutputPort("next_position"), self.get_input_port(self._path_planning_desired_index))
 
         # Connect the grasper to the FSM planner
@@ -112,10 +115,10 @@ class TidySpotPlanner(LeafSystem):
         builder.Connect(grasper.GetOutputPort("done_grasp"), self.GetInputPort("grasp_completed"))
         
         # connect the controller to the spot input port
-        builder.Connect(self.controller.get_output_port(), station.GetInputPort("spot.desired_state"))
-        # connect the controller to the output here
-        builder.Connect(self.GetOutputPort("desired_base_position"), self.controller.GetInputPort("desired_base_position"))
-        builder.Connect(self.GetOutputPort("desired_arm_position"), self.controller.GetInputPort("desired_arm_position"))
+        # builder.Connect(self.controller.get_output_port(), station.GetInputPort("spot.desired_state"))
+        # # connect the controller to the output here
+        # builder.Connect(self.GetOutputPort("desired_base_position"), self.controller.GetInputPort("desired_base_position"))
+        # builder.Connect(self.GetOutputPort("desired_arm_position"), self.controller.GetInputPort("desired_arm_position"))
 
     def get_spot_state_input_port(self):
         return self.GetInputPort("body_poses")
@@ -154,6 +157,7 @@ class TidySpotPlanner(LeafSystem):
             # Start exploring the environment
             print("State: IDLE -> EXPLORE")
 
+            state.get_mutable_discrete_state(self.use_path_planner).set_value([0])
             state.get_mutable_abstract_state(
                 int(self._state_index)
             ).set_value(SpotState.EXPLORE)
@@ -181,6 +185,7 @@ class TidySpotPlanner(LeafSystem):
                 # make the controller walk the robot to the next position
                 # self.next_desired_position = self.dynamic_path_planner.GetOutputPort("next_position").Eval(context)
 
+                state.get_mutable_discrete_state(self.use_path_planner).set_value([1])
                 # self.SendControllerPathOutput(context, )
 
 
@@ -296,7 +301,7 @@ class TidySpotPlanner(LeafSystem):
         print("TODO: Actually implement this")
         # Simulate exploring a new area
 
-        new_area = (random.randint(-5, 5), random.randint(-5, 5))
+        new_area = (random.uniform(-5.0, 5.0), random.uniform(-5.0, 5.0))
         self.explored_area.add(new_area)
 
         self.path_planning_goal = (new_area[0], new_area[1], 0.0)

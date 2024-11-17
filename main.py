@@ -2,6 +2,7 @@ from pydrake.all import (
     Simulator,
     StartMeshcat,
     DiagramBuilder,
+    StateInterpolatorWithDiscreteDerivative,
 )
 from manipulation import FindResource, running_as_notebook
 
@@ -15,7 +16,7 @@ from manipulation.station import (
 from tidy_spot_planner import TidySpotPlanner
 from navigation.map_helpers import PointCloudProcessor
 from navigation.path_planning import DynamicPathPlanner
-from controller.spot_controller import SpotController
+from controller.spot_controller import PositionCombiner
 
 from utils import *
 from perception.ObjectDetector import ObjectDetector
@@ -109,22 +110,37 @@ try:
     ### PLANNER ###
 
     # Add point cloud processor for path planner
-    point_cloud_processor = builder.AddSystem(PointCloudProcessor(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.1))
+    point_cloud_processor = builder.AddSystem(PointCloudProcessor(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.6))
     point_cloud_processor.set_name("point_cloud_processor")
     point_cloud_processor.connect_point_clouds(station, builder)
 
     # Add path planner and mapper
-    dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, point_cloud_processor, np.array([0,0,0]), resolution=0.1, robot_radius=0.1))
+    dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, builder, point_cloud_processor, np.array([0,0,0]), resolution=0.1, robot_radius=0.6, meshcat=meshcat))
     dynamic_path_planner.set_name("dynamic_path_planner")
     dynamic_path_planner.connect_processor(station, builder)
 
     # Add controller
-    controller = builder.AddSystem(SpotController(plant, use_teleop=False, meshcat=meshcat))
+    # controller = builder.AddSystem(SpotController(plant, use_teleop=False, meshcat=meshcat))
 
     # Add Finite State Machine = TidySpotPlanner
-    tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner, controller))
+    tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner))
     tidy_spot_planner.set_name("tidy_spot_planner")
     tidy_spot_planner.connect_components(builder, grasper, station)
+
+    # builder.Connect(dynamic_path_planner.GetOutputPort("desired_state"), station.GetInputPort("spot.desired_state"))
+
+    state_interpolator = builder.AddSystem(StateInterpolatorWithDiscreteDerivative(10, 0.1, suppress_initial_transient=True))
+    state_interpolator.set_name("state_interpolator")
+
+    # Connect desired state through interpolator to robot
+    builder.Connect(
+        dynamic_path_planner.GetOutputPort("desired_state"),
+        state_interpolator.get_input_port()
+    )
+    builder.Connect(
+        state_interpolator.get_output_port(),
+        station.GetInputPort("spot.desired_state")
+    )
 
     ### Build and visualize diagram ###
     diagram = builder.Build()
@@ -144,16 +160,44 @@ try:
 
     ### Set initial Spot state ###
     x0 = station.GetOutputPort("spot.state_estimated").Eval(station_context)
-    station.GetInputPort("spot.desired_state").FixValue(station_context, x0)
+    # Don't FixValue here - this will override the controller's commands
+    # station.GetInputPort("spot.desired_state").FixValue(station_context, x0)
+
 
     ### Run simulation ###
     simulator.set_target_realtime_rate(1)
     simulator.set_publish_every_time_step(True)
 
+    # Print states at each time step
+    def PrintStates(context):
+        # Get subsystem contexts
+        station_context = station.GetMyContextFromRoot(context)
+        path_planner_context = dynamic_path_planner.GetMyContextFromRoot(context)
+
+        # Evaluate ports with correct contexts
+        desired_state = station.GetInputPort("spot.desired_state").Eval(station_context)
+        actual_state = station.GetOutputPort("spot.state_estimated").Eval(station_context)
+        path_planner_state = dynamic_path_planner.GetOutputPort("desired_state").Eval(path_planner_context)
+
+        print(f"\nTime: {context.get_time():.2f}")
+        print(f"Desired state (to robot): {desired_state}")  # Just print base position for clarity
+        print(f"Path planner output: {path_planner_state}")
+        print(f"Actual state: {actual_state}")
+
+        # Also print path planner status
+        execute_path = dynamic_path_planner.get_input_port(dynamic_path_planner._execute_path_input_index).Eval(path_planner_context)
+        goal = dynamic_path_planner.get_input_port(dynamic_path_planner._goal_input_index).Eval(path_planner_context)
+        print(f"Execute path: {bool(execute_path[0])}")
+        print(f"Goal: {goal[:3]}")
+        print("---")
+
+
+    simulator.set_monitor(PrintStates)
+
     meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 
     # meshcat.StartRecording()
-    simulator.AdvanceTo(2.0)
+    simulator.AdvanceTo(10.0)
 
     ################
     ### TESTZONE ###
