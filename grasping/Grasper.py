@@ -18,25 +18,36 @@ class Grasper(LeafSystem):
         LeafSystem.__init__(self)
 
         # Input ports
-        self.DeclareVectorInputPort("do_grasp", 1)
+        self._do_grasp_input = self.DeclareVectorInputPort("do_grasp", 1)
         self._grasp_pose_input = self.DeclareAbstractInputPort("grasp_pose", AbstractValue.Make(RigidTransform()))
 
         # Internal states
         self._done_grasp_selection = self.DeclareDiscreteState(1)
+        self._is_grasping = self.DeclareDiscreteState(1)  # 0: Not grasping, 1: Grasping
 
         # Output ports
         self.DeclareStateOutputPort("done_grasp", self._done_grasp_selection) # TODO: Add success/fail flag
+        self.DeclareStateOutputPort("is_grasping", self._is_grasping)
+        # self.DeclareAbstractOutputPort("spot_desired_state", AbstractValue.Make(RigidTransform()), self.CalcDesiredArmState)
 
-        # self.DeclarePeriodicUnrestrictedUpdateEvent(0.1, 0.0, self.Update)
+        # self.DeclarePeriodicUnrestrictedUpdateEvent(0.5, 0.0, self.Update)
 
     def Update(self, context, state):
-        do_grasp = self.EvalVectorInput(context, 0).get_value()
-        if do_grasp:
-            # TODO: Check if already grasping
-            # Grasp() # TODO: Implement Grasp()
-            self._done_grasp_selection.set_value([1])
-        else:
-            return
+        do_grasp = self._do_grasp_input.Eval(context)[0]
+        is_grasping = self._is_grasping.get_vector(state).GetAtIndex(0)
+
+        if do_grasp and not is_grasping:
+            # Start grasping process
+            self._is_grasping.get_mutable_vector(state).SetAtIndex(0, 1)
+            self._done_grasp_selection.get_mutable_vector(state).SetAtIndex(0, 1)
+            self.Grasp()
+
+    def Grasp(self, context):
+        logging.info("Grasping object")
+        X_WGoal = self.GetGraspSelection(context)
+
+        # Calc IK stuff
+
 
     def connect_ports(self, grasp_selector, builder):
         # builder.Connect( 

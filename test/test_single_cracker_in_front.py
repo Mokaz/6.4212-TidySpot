@@ -37,6 +37,10 @@ import open3d as o3d
 from PIL import Image
 from matplotlib import pyplot as plt
 
+# Be sure to add the project path to PYTHONPATH before running this script
+# For example, if the project is located in ~/RoboticManipulation/6.4212-TidySpot, run:
+# export PYTHONPATH=$PYTHONPATH:~/RoboticManipulation/6.4212-TidySpot
+
 # CUDA memory management
 register_signal_handlers()
 
@@ -48,7 +52,7 @@ logger.addFilter(DrakeWarningFilter())
 use_anygrasp = True
 use_grounded_sam = True
 
-def segmentation_test_directives():
+def single_cracker_in_front_directives():
     return """
 directives:
 - add_model:
@@ -125,7 +129,7 @@ try:
             image_size = (camera_config.width, camera_config.height)
 
     ### Add objects to scene ###
-    scenario = AppendDirectives(scenario, data=segmentation_test_directives())
+    scenario = AppendDirectives(scenario, data=single_cracker_in_front_directives())
 
     station = builder.AddSystem(MakeHardwareStation(
         scenario=scenario,
