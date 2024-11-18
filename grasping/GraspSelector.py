@@ -17,7 +17,7 @@ import open3d as o3d
 from typing import List, Tuple, Mapping
 
 class GraspSelector(LeafSystem):
-    def __init__(self, use_anygrasp: bool, anygrasp_path: str = os.path.join(os.getcwd(), "anygrasp_sdk")):
+    def __init__(self, use_anygrasp: bool, anygrasp_path: str = os.path.join(os.getcwd(), "third_party/anygrasp_sdk")):
         LeafSystem.__init__(self)
         self._use_anygrasp = use_anygrasp
         self.anygrasp_handler = None
