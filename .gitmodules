@@ -1,0 +1,6 @@
+[submodule "third_party/Grounded-Segment-Anything"]
+	path = third_party/Grounded-Segment-Anything
+	url = https://github.com/IDEA-Research/Grounded-Segment-Anything.git
+[submodule "third_party/MinkowskiEngine"]
+	path = third_party/MinkowskiEngine
+	url = https://github.com/NVIDIA/MinkowskiEngine.git

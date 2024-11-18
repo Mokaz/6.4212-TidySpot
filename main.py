@@ -45,7 +45,7 @@ logger.addFilter(DrakeWarningFilter())
 
 # Use AnyGrasp (TODO: add to args later)
 use_anygrasp = False
-use_grounded_sam = False
+use_grounded_sam = True
 
 try:
     ### Start the visualizer ###

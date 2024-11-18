@@ -23,7 +23,7 @@ import cv2
 import numpy as np
 
 class ObjectDetector(LeafSystem):
-    def __init__(self, station: Diagram, camera_names: List[str], image_size: Tuple[int, int], use_groundedsam: bool, groundedsam_path: str = os.path.join(os.getcwd(), "Grounded-Segment-Anything")):
+    def __init__(self, station: Diagram, camera_names: List[str], image_size: Tuple[int, int], use_groundedsam: bool, groundedsam_path: str = os.path.join(os.getcwd(), "third_party/Grounded-Segment-Anything")):
         LeafSystem.__init__(self)
 
         if use_groundedsam:
