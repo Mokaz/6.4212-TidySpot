@@ -38,8 +38,9 @@ from PIL import Image
 from matplotlib import pyplot as plt
 
 # Be sure to add the project path to PYTHONPATH before running this script
-# For example, if the project is located in ~/RoboticManipulation/6.4212-TidySpot, run:
+# For example, if the project is located in ~/RoboticManipulation/6.4212-TidySpot, run both:
 # export PYTHONPATH=$PYTHONPATH:~/RoboticManipulation/6.4212-TidySpot
+# export PYTHONPATH=$PYTHONPATH:~/RoboticManipulation/6.4212-TidySpot/third_party
 
 # CUDA memory management
 register_signal_handlers()
@@ -168,8 +169,21 @@ try:
 
     ### PLANNER ###
 
+    # # Add point cloud processor for path planner
+    # point_cloud_processor = builder.AddSystem(PointCloudProcessor(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.6))
+    # point_cloud_processor.set_name("point_cloud_processor")
+    # point_cloud_processor.connect_point_clouds(station, builder)
+
+    # # Add path planner and mapper
+    # dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, builder, point_cloud_processor, np.array([0,0,0]), resolution=0.1, robot_radius=0.6, meshcat=meshcat))
+    # dynamic_path_planner.set_name("dynamic_path_planner")
+    # dynamic_path_planner.connect_processor(station, builder)
+
+    # # Add controller
+    # # controller = builder.AddSystem(SpotController(plant, use_teleop=False, meshcat=meshcat))
+
     # # Add Finite State Machine = TidySpotPlanner
-    # tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner, controller))
+    # tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner))
     # tidy_spot_planner.set_name("tidy_spot_planner")
     # tidy_spot_planner.connect_components(builder, grasper, station)
 
@@ -199,8 +213,8 @@ try:
 
     meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 
-    meshcat.StartRecording()
-    simulator.AdvanceTo(2.0)
+    # meshcat.StartRecording()
+    simulator.AdvanceTo(15.0)
 
     ################
     ### TESTZONE ###
@@ -210,7 +224,7 @@ try:
     # object_detector.display_all_camera_images(object_detector_context)
 
     # # Display single image
-    # color_image = object_detector.get_color_image("frontleft", object_detector_context).data # Get color image from frontleft camera
+    # color_image = object_detector.get_color_image("back", object_detector_context).data # Get color image from frontleft camera
     # plt.imshow(color_image)
     # plt.show()
 
@@ -232,8 +246,8 @@ try:
     
     # display_front_images(object_detector, object_detector_context)
 
-    # # Test segmentation on frontleft camera
-    # object_detector.test_segmentation_frontleft(object_detector_context)
+    # # Test segmentation on camera
+    # object_detector.test_segmentation(object_detector_context, "back")
 
     # # Test cropping from segmentation on frontleft camera
     # pcd_cropper_context = point_cloud_cropper.GetMyMutableContextFromRoot(context)
@@ -246,11 +260,11 @@ try:
     # grasp_selector.test_anygrasp_frontleft_segmented_pcd(grasp_selector.GetMyMutableContextFromRoot(context))
 
     # Test grasp selection
-    grasp_pose = grasper.GetGraspSelection(grasper.GetMyMutableContextFromRoot(context))
-    AddMeshcatTriad(meshcat, "grasp_pose", length=0.1, radius=0.006, X_PT=grasp_pose)
+    # grasp_pose = grasper.GetGraspSelection(grasper.GetMyMutableContextFromRoot(context))
+    # AddMeshcatTriad(meshcat, "grasp_pose", length=0.1, radius=0.006, X_PT=grasp_pose)
 
     # # Keep meshcat alive
-    meshcat.PublishRecording()
+    # meshcat.PublishRecording()
 
     while not meshcat.GetButtonClicks("Stop meshcat"):
         pass

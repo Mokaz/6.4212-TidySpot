@@ -60,34 +60,50 @@ class ObjectDetector(LeafSystem):
                 "segmentation_mask": np.array([]),
                 "camera_name": ""
             }),
-            self.GetClosestObjectSegmentation
+            self.SegmentFrontCameras
         )
 
-    def GetClosestObjectSegmentation(self, context: Context, output):
-        # run_GroundedSAM(), or fetch object segmentations from internal state # TODO: implement this
+        # self.DeclarePeriodicUnrestrictedUpdateEvent(3.0, 0.0, self.Update)
 
-        closest_object = np.array([0]) # TODO: Implement this
+    def Update(self, context, state):
+        for camera_name in self._camera_names:
+            rgb_image = cv2.cvtColor(self.get_color_image(camera_name, context).data, cv2.COLOR_RGBA2RGB)
+            mask, confidence = self.grounded_sam.detect_and_segment_objects(rgb_image, camera_name)
 
-        rgba_image = self.get_color_image("frontleft", context).data
-        rgb_image = cv2.cvtColor(rgba_image, cv2.COLOR_RGBA2RGB)
+    def SegmentFrontCameras(self, context: Context, output):
+        frontleft_rgb_image = cv2.cvtColor(self.get_color_image("frontleft", context).data, cv2.COLOR_RGBA2RGB)
+        frontright_rgb_image = cv2.cvtColor(self.get_color_image("frontright", context).data, cv2.COLOR_RGBA2RGB)
 
-        segmentation_mask = self.grounded_sam.detect_and_segment_objects(rgb_image)
-        camera_name = "frontleft" # Temp
+        front_left_mask, front_left_confidence = self.grounded_sam.detect_and_segment_objects(frontleft_rgb_image, "frontleft")
+        front_right_mask, front_right_confidence = self.grounded_sam.detect_and_segment_objects(frontright_rgb_image, "frontright")
 
+        masks_confidences = [
+            (front_left_mask, front_left_confidence, "frontleft"),
+            (front_right_mask, front_right_confidence, "frontright")
+        ]
+
+        # Filter out None masks
+        valid_masks = [(mask, confidence, name) for mask, confidence, name in masks_confidences if mask is not None]
+
+        if valid_masks:
+            # Select the mask with the highest confidence
+            segmentation_mask, _, camera_name = max(valid_masks, key=lambda x: x[1])
+        else:
+            segmentation_mask = np.array([])
+            camera_name = ""
 
         output.set_value({
-            "segmentation_mask": segmentation_mask,  # TODO: Implement this
+            "segmentation_mask": segmentation_mask,
             "camera_name": camera_name
         })
 
         # print("ObjectDetector: GetClosestObjectSegmentation complete")
 
-    def test_segmentation_frontleft(self, object_detector_context: Context):
-        rgba_image = self.get_color_image("frontleft", object_detector_context).data
-        rgb_image = cv2.cvtColor(rgba_image, cv2.COLOR_RGBA2RGB)
-        mask = self.grounded_sam.detect_and_segment_objects(rgb_image)
-        print("Frontleft segmentation test complete")
-        print(mask.shape)
+    def test_segmentation(self, object_detector_context: Context, camera_name):
+        rgb_image = cv2.cvtColor(self.get_color_image(camera_name, object_detector_context).data, cv2.COLOR_RGBA2RGB)
+        mask, confidence = self.grounded_sam.detect_and_segment_objects(rgb_image, camera_name)
+        print("Mask shape:", mask.shape)
+        print(camera_name, " segmentation test complete")
 
     def connect_cameras(self, station: Diagram, builder: DiagramBuilder):
         for camera_name in self._camera_names:
