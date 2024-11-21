@@ -22,7 +22,15 @@ In the Drake simulation, the objects will be of unknown types, and the room may 
    conda env create -n tidyspot-env -f ./tidyspot-conda-environment.yml
    conda activate tidyspot-env
    ```
-2. Clone and install the MinkowskiEngine:
+2. Clone and install third party directories, i.e. MinkowskiEngine, GroundedSam, AnyGrasp:
+   ```
+   git submodule update --init --recursive
+   ```
+   Follow the instructions in or run install_env.sh
+   ```
+   ./install_env.sh
+   ```
+   ### manual install (not preferred)
    ```bash
    cd ~
    git clone https://github.com/NVIDIA/MinkowskiEngine.git
