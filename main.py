@@ -45,7 +45,7 @@ logger.addFilter(DrakeWarningFilter())
 
 # Use AnyGrasp (TODO: add to args later)
 use_anygrasp = False
-use_grounded_sam = True
+use_grounded_sam = False
 
 try:
     ### Start the visualizer ###
@@ -119,16 +119,12 @@ try:
     dynamic_path_planner.set_name("dynamic_path_planner")
     dynamic_path_planner.connect_processor(station, builder)
 
-    # Add controller
-    # controller = builder.AddSystem(SpotController(plant, use_teleop=False, meshcat=meshcat))
-
     # Add Finite State Machine = TidySpotPlanner
     tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner))
     tidy_spot_planner.set_name("tidy_spot_planner")
     tidy_spot_planner.connect_components(builder, grasper, station)
 
-    # builder.Connect(dynamic_path_planner.GetOutputPort("desired_state"), station.GetInputPort("spot.desired_state"))
-
+    # Last component, add state interpolator which converts desired state to desired state and velocity
     state_interpolator = builder.AddSystem(StateInterpolatorWithDiscreteDerivative(10, 0.1, suppress_initial_transient=True))
     state_interpolator.set_name("state_interpolator")
 

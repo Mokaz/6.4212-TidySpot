@@ -40,12 +40,9 @@ class TidySpotPlanner(LeafSystem):
         LeafSystem.__init__(self)
 
         self.dynamic_path_planner = dynamic_path_planner
-        # self.controller = controller
 
         # Spot's internal planning states
         self._state_index = self.DeclareAbstractState(AbstractValue.Make(SpotState.IDLE))
-        # self._traj_X_G_index = self.DeclareAbstractState(AbstractValue.Make(PiecewisePose()))
-        # self._traj_wsg_index = self.DeclareAbstractState(AbstractValue.Make(PiecewisePolynomial()))
 
         self._times_index = self.DeclareAbstractState(
             AbstractValue.Make({"initial": 0.0})
@@ -56,8 +53,6 @@ class TidySpotPlanner(LeafSystem):
         self.next_desired_position = np.array([0.0, 0.0, 0.0])
         # Input ports
         self._spot_body_state_index = self.DeclareVectorInputPort("body_poses", 20).get_index()
-        #self._grasp_input_index = self.DeclareAbstractInputPort("grasp_selection", AbstractValue.Make((np.inf, RigidTransform()))).get_index()
-        #self._wsg_state_index = self.DeclareVectorInputPort("wsg_state", 2).get_index()
         self._path_planning_desired_index = self.DeclareVectorInputPort("path_planning_desired", 3).get_index()
 
         # Input ports for various components
@@ -67,22 +62,14 @@ class TidySpotPlanner(LeafSystem):
         self.DeclareVectorInputPort("grasp_completed", 1) # TODO: Add success/fail flag to data sent to this port
 
         # Output ports
-        # self.DeclareAbstractOutputPort("X_WG", lambda: AbstractValue.Make(RigidTransform()), self.CalcGripperPose)
-        self._spot_commanded_state_index = self.DeclareVectorOutputPort("spot_commanded_state", 20, self.CalcSpotState).get_index()
-
-        # Declare output ports for the path planner
+        # Declare output ports for the path planner. The path planner then sends to the actual robot
         self.use_path_planner = self.DeclareDiscreteState(1)
         self.DeclareStateOutputPort("use_path_planner", self.use_path_planner)
-        self._target_base_position = self.DeclareVectorOutputPort("target_base_position", 3, self.CalcSpotState).get_index()
         self._path_planning_goal_output = self.DeclareVectorOutputPort("path_planning_goal", 3, self.CalcPathPlanningGoal).get_index()
         self._path_planning_position_output = self.DeclareVectorOutputPort("path_planning_position", 3, self.CalcPathPlanningPosition).get_index()
-    
+
         # Output ports for various components
         self.DeclareVectorOutputPort("request_grasp", 1, lambda context, output: print("Setting request_grasp output...")) # TODO: Replace lambda with function that sets output based on criteria (attempth count etc.)
-
-        # Declare output ports for the controller
-        self._controller_base_pos_output = self.DeclareVectorOutputPort("desired_base_position", 3, self.SendControllerPathOutput).get_index()
-        self._controller_arm_pos_output = self.DeclareVectorOutputPort("desired_arm_position", 7, self.SendControllerArmOutput).get_index()
 
         self._rng = np.random.default_rng()
 
@@ -104,21 +91,15 @@ class TidySpotPlanner(LeafSystem):
 
 
         # Connect the path planner to the FSM planner
+        # The path planner uses the robot's current position and the goal to plan a path, and returns a flag when it's done. It only moves if use_path_planner is set to 1.
         builder.Connect(self.get_output_port(self._path_planning_goal_output), self.dynamic_path_planner.GetInputPort("goal"))
         builder.Connect(self.get_output_port(self._path_planning_position_output), self.dynamic_path_planner.GetInputPort("robot_position"))
         builder.Connect(self.dynamic_path_planner.GetOutputPort("done_astar"), self.GetInputPort("path_planning_finished"))
         builder.Connect(self.GetOutputPort("use_path_planner"), self.dynamic_path_planner.GetInputPort("execute_path"))
-        # builder.Connect(self.dynamic_path_planner.GetOutputPort("next_position"), self.get_input_port(self._path_planning_desired_index))
 
         # Connect the grasper to the FSM planner
         builder.Connect(self.GetOutputPort("request_grasp"), grasper.GetInputPort("do_grasp"))
         builder.Connect(grasper.GetOutputPort("done_grasp"), self.GetInputPort("grasp_completed"))
-        
-        # connect the controller to the spot input port
-        # builder.Connect(self.controller.get_output_port(), station.GetInputPort("spot.desired_state"))
-        # # connect the controller to the output here
-        # builder.Connect(self.GetOutputPort("desired_base_position"), self.controller.GetInputPort("desired_base_position"))
-        # builder.Connect(self.GetOutputPort("desired_arm_position"), self.controller.GetInputPort("desired_arm_position"))
 
     def get_spot_state_input_port(self):
         return self.GetInputPort("body_poses")
@@ -132,18 +113,6 @@ class TidySpotPlanner(LeafSystem):
 
     def _get_explore_completed(self, context, state):
         return self.get_path_planning_finished_input_port().Eval(context)[0]
-
-    # def _set_target_base_position(self, context, output):
-    #     (table_idx, camera_idx) = self._get_looking_inds(context)
-    #     base_pose = self._camera_pos_list[table_idx, camera_idx, :].copy()
-    #     if self._get_current_action(context) == Action.STEP_FORWARD:
-    #         # step forward in current direction
-    #         R = RotationMatrix.MakeZRotation(base_pose[2])
-    #         step = R.multiply([0.2, 0, 0])
-    #         base_pose[:2] += step[:2]  # ignore height in z direction
-    #     if self._get_current_action(context) == Action.CARRY_BACK:
-    #         base_pose = self._final_position
-    #     output.SetFromVector(base_pose)
 
 
     def Update(self, context, state):
@@ -182,13 +151,7 @@ class TidySpotPlanner(LeafSystem):
                     ).set_value(SpotState.IDLE)
             else:
                 print(f"Exploring area at {self.path_planning_goal}")
-                # make the controller walk the robot to the next position
-                # self.next_desired_position = self.dynamic_path_planner.GetOutputPort("next_position").Eval(context)
-
                 state.get_mutable_discrete_state(self.use_path_planner).set_value([1])
-                # self.SendControllerPathOutput(context, )
-
-
 
         elif mode == SpotState.DETECT_OBJECT:
             if self.detected_objects:
@@ -242,24 +205,12 @@ class TidySpotPlanner(LeafSystem):
                 int(self._state_index)
             ).set_value(SpotState.IDLE)
 
-    def CalcSpotState(self, context, output):
-        # traj_q = context.get_mutable_abstract_state(int(self._traj_q_index)).get_value()
-
-        # output.SetFromVector(traj_q.value(context.get_time()))
-        pass
-
     def CalcPathPlanningGoal(self, context, output):
         output.SetFromVector(self.path_planning_goal)
 
     def CalcPathPlanningPosition(self, context, output):
         spot_body_pos = self.robot_state[:3]
         output.SetFromVector(spot_body_pos)
-
-    def SendControllerPathOutput(self, context, output):
-        output.SetFromVector(self.next_desired_position)
-
-    def SendControllerArmOutput(self, context, output):
-        output.SetFromVector(self.next_arm_goal)
 
     def detect_object(self):
         # Use Grounded SAM to detect objects
@@ -296,11 +247,9 @@ class TidySpotPlanner(LeafSystem):
         pass
 
     def explore_environment(self):
-        # Frontier-based search for unexplored areas
         print("Exploring environment...")
-        print("TODO: Actually implement this")
-        # Simulate exploring a new area
 
+        # Random search
         new_area = (random.uniform(-5.0, 5.0), random.uniform(-5.0, 5.0))
         self.explored_area.add(new_area)
 

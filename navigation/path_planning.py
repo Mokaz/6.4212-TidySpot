@@ -138,6 +138,7 @@ class DynamicPathPlanner(LeafSystem):
                 rx, ry = self.planning(current_position, goal, grid_map)
 
                 if len(rx) > 1:
+                    # when the segments are too small, the robot movement is not smooth
                     # Downsample the path to create larger segments
                     # Take every Nth point to achieve roughly 1m segments
                     desired_segment_length = 0.5  # 1 meter segments
@@ -180,6 +181,28 @@ class DynamicPathPlanner(LeafSystem):
                     self.waypoints = np.column_stack((selected_points, headings))
                     self.current_waypoint_idx = 0
                     position = self.waypoints[self.current_waypoint_idx]
+                    # Visualize the path using meshcat
+                    if self.meshcat:
+                        # Draw lines between waypoints
+                        waypoint_points = np.vstack((selected_points.T, np.zeros(len(indices))))
+                        self.meshcat.SetLine(
+                            self.visualize_path,
+                            waypoint_points,
+                            rgba=Rgba(0, 1, 0, 1),  # Green for waypoints
+                            line_width=4
+                        )
+
+                        # Draw spheres at each waypoint
+                        # for i, point in enumerate(selected_points):
+                        #     self.meshcat.SetObject(
+                        #         f"{self.visualize_path}/point_{i}",
+                        #         Sphere(radius=0.1),
+                        #         Rgba(1, 0, 0, 1)  # Red spheres
+                        #     )
+                        #     self.meshcat.SetTransform(
+                        #         f"{self.visualize_path}/point_{i}",
+                        #         RigidTransform([point[0], point[1], 0])
+                        #     )
                 else:
                     print("No path found")
                     state.get_mutable_discrete_state(self._done_astar).set_value([1])

@@ -16,4 +16,12 @@ git submodule update --init --recursive
 cd grounded-sam-osx && bash install.sh
 
 # anygrasp
+cd third_party/anygrasp_sdk
 pip install graspnetAPI --no-deps
+cd pointnet2
+python setup.py install
+cd ..
+cd grasp_detection
+cp gsnet_versions/gsnet.cpython-310m-x86_64-linux-gnu.so gsnet.so
+cp ../license_registration/lib_cxx_versions/lib_cxx.cpython-310m-x86_64-linux-gnu.so lib_cxx.so
+pip install transforms3d
