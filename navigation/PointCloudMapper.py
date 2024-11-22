@@ -22,12 +22,17 @@ class PointCloudMapper(LeafSystem):
         self._cameras = {
             point_cloud_name: station.GetSubsystemByName(f"rgbd_sensor_{point_cloud_name}") for point_cloud_name in camera_names
         }
+        
+        # Input ports
         self._point_cloud_inputs = {
             point_cloud_name: self.DeclareAbstractInputPort(f"{point_cloud_name}.point_cloud", AbstractValue.Make(PointCloud())) for point_cloud_name in camera_names
         }
         self._object_point_cloud = self.DeclareAbstractInputPort(f"cropped_point_cloud", AbstractValue.Make(PointCloud()))
+
+        # Output ports
         self.DeclareAbstractOutputPort("grid_map", lambda: AbstractValue.Make(np.full((100, 100), -1)), self.CalcGridMap)
         self.DeclareAbstractOutputPort("object_clusters", lambda: AbstractValue.Make({}), self.CalcObjectClusters)
+
         self.resolution = resolution
         self.robot_radius = robot_radius
         self.grid_map = np.full((100, 100), -1)  # Initialized with a fixed size grid map with unexplored (-1)
