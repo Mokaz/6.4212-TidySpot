@@ -109,15 +109,15 @@ try:
 
     ### PLANNER ###
 
-    # Add point cloud processor for path planner
-    point_cloud_processor = builder.AddSystem(PointCloudMapper(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.6))
-    point_cloud_processor.set_name("point_cloud_processor")
-    point_cloud_processor.connect_point_clouds(station, builder)
+    # Add point cloud mapper for path planner
+    point_cloud_mapper = builder.AddSystem(PointCloudMapper(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.6))
+    point_cloud_mapper.set_name("point_cloud_mapper")
+    point_cloud_mapper.connect_point_clouds(station, builder)
 
     # Add path planner and mapper
-    dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, builder, point_cloud_processor, np.array([0,0,0]), resolution=0.1, robot_radius=0.6, meshcat=meshcat))
+    dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, builder, point_cloud_mapper, np.array([0,0,0]), resolution=0.1, robot_radius=0.6, meshcat=meshcat))
     dynamic_path_planner.set_name("dynamic_path_planner")
-    dynamic_path_planner.connect_processor(station, builder)
+    dynamic_path_planner.connect_mapper(station, builder)
 
     # Add Finite State Machine = TidySpotPlanner
     tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant))

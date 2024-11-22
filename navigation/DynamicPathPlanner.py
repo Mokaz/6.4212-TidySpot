@@ -36,11 +36,10 @@ from navigation.PointCloudMapper import PointCloudMapper
 show_animation = True
 
 class DynamicPathPlanner(LeafSystem):
-    def __init__(self, station, builder, point_cloud_processor, initial_position, resolution, robot_radius, time_step=0.1, meshcat=None):
+    def __init__(self, station, builder, initial_position, resolution, robot_radius, time_step=0.1, meshcat=None):
         """
         Initialize grid map for A* planning and smooth trajectory generation.
 
-        point_cloud_processor: The PointCloudProcessor instance for obtaining the updated grid map.
         initial_position: Initial position of the robot.
         resolution: Grid resolution.
         robot_radius: Robot radius.
@@ -48,7 +47,6 @@ class DynamicPathPlanner(LeafSystem):
         meshcat: Instance of Meshcat for visualization.
         """
         LeafSystem.__init__(self)
-        self.point_cloud_processor = point_cloud_processor
         self._initial_position = initial_position
         self.resolution = resolution
         self.robot_radius = robot_radius
@@ -101,11 +99,8 @@ class DynamicPathPlanner(LeafSystem):
         self.desired_state = np.concatenate([desired_position, self.desired_arm_state])
 
 
-    def connect_processor(self, station: Diagram, builder: DiagramBuilder):
-        point_cloud_processor_output = self.point_cloud_processor.get_output_port(0)  # Output grid_map from point cloud processor
-        grid_map_input = self.get_input_port(self._grid_map_input_index)
-
-        builder.Connect(point_cloud_processor_output, grid_map_input)
+    def connect_mapper(self, point_cloud_mapper, station: Diagram, builder: DiagramBuilder):
+        builder.Connect(point_cloud_mapper.get_output_port(0), self.get_input_port(self._grid_map_input_index)) # Output grid_map from mapper to input grid_map of planner
 
     def UpdateDesiredState(self, context: Context, output):
         output.SetFromVector(self.desired_state)
@@ -241,7 +236,7 @@ class DynamicPathPlanner(LeafSystem):
 
         start: tuple of start position (x, y)
         goal: tuple of goal position (x, y)
-        grid_map: The updated grid map from PointCloudProcessor.
+        grid_map: The updated grid map from PointCloudMapper.
         """
         start_node = self.Node(self.calc_xy_index(start[0], grid_map.shape[1] // 2),
                                self.calc_xy_index(start[1], grid_map.shape[0] // 2), 0.0, -1)

@@ -169,24 +169,6 @@ try:
 
     ### PLANNER ###
 
-    # # Add point cloud processor for path planner
-    # point_cloud_processor = builder.AddSystem(PointCloudProcessor(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.6))
-    # point_cloud_processor.set_name("point_cloud_processor")
-    # point_cloud_processor.connect_point_clouds(station, builder)
-
-    # # Add path planner and mapper
-    # dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, builder, point_cloud_processor, np.array([0,0,0]), resolution=0.1, robot_radius=0.6, meshcat=meshcat))
-    # dynamic_path_planner.set_name("dynamic_path_planner")
-    # dynamic_path_planner.connect_processor(station, builder)
-
-    # # Add controller
-    # # controller = builder.AddSystem(SpotController(plant, use_teleop=False, meshcat=meshcat))
-
-    # # Add Finite State Machine = TidySpotPlanner
-    # tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner))
-    # tidy_spot_planner.set_name("tidy_spot_planner")
-    # tidy_spot_planner.connect_components(builder, grasper, station)
-
     ### Build and visualize diagram ###
     diagram = builder.Build()
     context = diagram.CreateDefaultContext()
