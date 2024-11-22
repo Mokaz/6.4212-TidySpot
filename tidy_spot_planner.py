@@ -18,9 +18,9 @@ from pydrake.all import (
     AbstractStateIndex,
 )
 from enum import Enum, auto
-from navigation.exploration import FrontierExplorer
-from navigation.map_helpers import PointCloudProcessor
-from navigation.path_planning import DynamicPathPlanner
+from navigation.FrontierExplorer import FrontierExplorer
+from navigation.PointCloudMapper import PointCloudMapper
+from navigation.DynamicPathPlanner import DynamicPathPlanner
 
 
 # Define FSM States
@@ -36,10 +36,8 @@ class SpotState(Enum):
 
 # Define the high-level planner for Spot
 class TidySpotPlanner(LeafSystem):
-    def __init__(self, plant, dynamic_path_planner):
+    def __init__(self, plant):
         LeafSystem.__init__(self)
-
-        self.dynamic_path_planner = dynamic_path_planner
 
         # Spot's internal planning states
         self._state_index = self.DeclareAbstractState(AbstractValue.Make(SpotState.IDLE))
@@ -85,17 +83,17 @@ class TidySpotPlanner(LeafSystem):
         self.path_planning_goal = (0, 0, 0)  # Goal for path planning
 
 
-    def connect_components(self, builder, grasper, station):
+    def connect_components(self, builder, grasper, dynamic_path_planner, station):
         builder.Connect(station.GetOutputPort("spot.state_estimated"), self.get_input_port(self._spot_body_state_index))
         # builder.Connect(self.get_output_port(self._spot_commanded_state_index), station.GetInputPort("spot.desired_state"))
 
 
         # Connect the path planner to the FSM planner
         # The path planner uses the robot's current position and the goal to plan a path, and returns a flag when it's done. It only moves if use_path_planner is set to 1.
-        builder.Connect(self.get_output_port(self._path_planning_goal_output), self.dynamic_path_planner.GetInputPort("goal"))
-        builder.Connect(self.get_output_port(self._path_planning_position_output), self.dynamic_path_planner.GetInputPort("robot_position"))
-        builder.Connect(self.dynamic_path_planner.GetOutputPort("done_astar"), self.GetInputPort("path_planning_finished"))
-        builder.Connect(self.GetOutputPort("use_path_planner"), self.dynamic_path_planner.GetInputPort("execute_path"))
+        builder.Connect(self.get_output_port(self._path_planning_goal_output), dynamic_path_planner.GetInputPort("goal"))
+        builder.Connect(self.get_output_port(self._path_planning_position_output), dynamic_path_planner.GetInputPort("robot_position"))
+        builder.Connect(dynamic_path_planner.GetOutputPort("done_astar"), self.GetInputPort("path_planning_finished"))
+        builder.Connect(self.GetOutputPort("use_path_planner"), dynamic_path_planner.GetInputPort("execute_path"))
 
         # Connect the grasper to the FSM planner
         builder.Connect(self.GetOutputPort("request_grasp"), grasper.GetInputPort("do_grasp"))

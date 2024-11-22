@@ -13,7 +13,7 @@ from pydrake.all import (
 )
 from typing import List, Tuple
 
-class PointCloudProcessor(LeafSystem):
+class PointCloudMapper(LeafSystem):
     def __init__(self, station: Diagram, camera_names: List[str], point_clouds, resolution, robot_radius, height_threshold=0.1):
         LeafSystem.__init__(self)
         self._point_clouds = point_clouds

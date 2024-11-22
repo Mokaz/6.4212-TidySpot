@@ -18,8 +18,8 @@ from manipulation.station import (
 from manipulation.meshcat_utils import AddMeshcatTriad
 
 from tidy_spot_planner import TidySpotPlanner
-from navigation.map_helpers import PointCloudProcessor
-from navigation.path_planning import DynamicPathPlanner
+from navigation.PointCloudMapper import PointCloudMapper
+from navigation.DynamicPathPlanner import DynamicPathPlanner
 from controller.spot_controller import SpotController
 
 from utils import *

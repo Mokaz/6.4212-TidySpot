@@ -31,7 +31,7 @@ from pydrake.all import (
     Diagram,
     Rgba,
 )
-from navigation.map_helpers import PointCloudProcessor
+from navigation.PointCloudMapper import PointCloudMapper
 
 show_animation = True
 
@@ -94,11 +94,11 @@ class DynamicPathPlanner(LeafSystem):
         # Periodic update for trajectory generation
         self._state_update_event = self.DeclarePeriodicUnrestrictedUpdateEvent(self.time_step, 0.0, self.UpdateTrajectory)
 
-        position = np.array([0.0, 0.0, 0.0])
-        self.arm_state = [0.0, -3.1, 3.1, 0.0, 0.0, 0.0, 0.0] # default stowed arm state
-
-        # Update the discrete state
-        self.desired_state = np.concatenate([position, self.arm_state])
+        # Initialize desired state
+        desired_position = np.array([0.0, 0.0, 0.0])
+        self.desired_arm_state = [0.0, -3.1, 3.1, 0.0, 0.0, 0.0, 0.0] # default stowed arm state
+        
+        self.desired_state = np.concatenate([desired_position, self.desired_arm_state])
 
 
     def connect_processor(self, station: Diagram, builder: DiagramBuilder):
@@ -232,7 +232,7 @@ class DynamicPathPlanner(LeafSystem):
             self.current_waypoint_idx = 0
 
         # Update the desired state with positions and default arm state
-        self.desired_state= np.concatenate([position, self.arm_state])
+        self.desired_state= np.concatenate([position, self.desired_arm_state])
         state.get_mutable_discrete_state(self._desired_state).SetFromVector(self.desired_state)
 
     def planning(self, start, goal, grid_map):

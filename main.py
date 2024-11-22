@@ -14,8 +14,8 @@ from manipulation.station import (
 )
 
 from tidy_spot_planner import TidySpotPlanner
-from navigation.map_helpers import PointCloudProcessor
-from navigation.path_planning import DynamicPathPlanner
+from navigation.PointCloudMapper import PointCloudMapper
+from navigation.DynamicPathPlanner import DynamicPathPlanner
 from controller.spot_controller import PositionCombiner
 
 from utils import *
@@ -110,7 +110,7 @@ try:
     ### PLANNER ###
 
     # Add point cloud processor for path planner
-    point_cloud_processor = builder.AddSystem(PointCloudProcessor(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.6))
+    point_cloud_processor = builder.AddSystem(PointCloudMapper(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.6))
     point_cloud_processor.set_name("point_cloud_processor")
     point_cloud_processor.connect_point_clouds(station, builder)
 
@@ -120,9 +120,9 @@ try:
     dynamic_path_planner.connect_processor(station, builder)
 
     # Add Finite State Machine = TidySpotPlanner
-    tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant, dynamic_path_planner))
+    tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant))
     tidy_spot_planner.set_name("tidy_spot_planner")
-    tidy_spot_planner.connect_components(builder, grasper, station)
+    tidy_spot_planner.connect_components(builder, grasper, dynamic_path_planner, station)
 
     # Last component, add state interpolator which converts desired state to desired state and velocity
     state_interpolator = builder.AddSystem(StateInterpolatorWithDiscreteDerivative(10, 0.1, suppress_initial_transient=True))
@@ -192,8 +192,8 @@ try:
 
     meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 
-    # meshcat.StartRecording()
-    simulator.AdvanceTo(10.0)
+    meshcat.StartRecording()
+    simulator.AdvanceTo(100.0)
 
     ################
     ### TESTZONE ###
@@ -211,7 +211,7 @@ try:
     # grasp_selector.test_anygrasp_frontleft_pcd(to_point_cloud, context)
 
     # # Keep meshcat alive
-    # meshcat.PublishRecording()
+    meshcat.PublishRecording()
 
     while not meshcat.GetButtonClicks("Stop meshcat"):
         pass
