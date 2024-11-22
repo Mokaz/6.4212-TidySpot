@@ -115,9 +115,9 @@ try:
     point_cloud_mapper.connect_point_clouds(station, builder)
 
     # Add path planner and mapper
-    dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, builder, point_cloud_mapper, np.array([0,0,0]), resolution=0.1, robot_radius=0.6, meshcat=meshcat))
+    dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, builder, np.array([0,0,0]), resolution=0.1, robot_radius=0.6, meshcat=meshcat))
     dynamic_path_planner.set_name("dynamic_path_planner")
-    dynamic_path_planner.connect_mapper(station, builder)
+    dynamic_path_planner.connect_mapper(point_cloud_mapper, station, builder)
 
     # Add Finite State Machine = TidySpotPlanner
     tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant))
