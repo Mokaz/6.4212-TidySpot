@@ -116,7 +116,7 @@ class DynamicPathPlanner(LeafSystem):
         current_position = self.EvalVectorInput(context, self._robot_position_input_index).get_value()
 
         # Default to staying still
-        position = current_position[:3]
+        desired_position = current_position[:3]
         state.get_mutable_discrete_state(self._done_astar).set_value([0])
 
         if execute_path:
@@ -180,7 +180,7 @@ class DynamicPathPlanner(LeafSystem):
                     # Combine positions and headings into waypoints
                     self.waypoints = np.column_stack((selected_points, headings))
                     self.current_waypoint_idx = 0
-                    position = self.waypoints[self.current_waypoint_idx]
+                    desired_position = self.waypoints[self.current_waypoint_idx]
                     # Visualize the path using meshcat
                     if self.meshcat:
                         # Draw lines between waypoints
@@ -224,7 +224,7 @@ class DynamicPathPlanner(LeafSystem):
 
 
                 # Follow existing trajectory
-                position = current_waypoint
+                desired_position = current_waypoint
 
         else:
             # Reset trajectory when not executing
@@ -232,7 +232,7 @@ class DynamicPathPlanner(LeafSystem):
             self.current_waypoint_idx = 0
 
         # Update the desired state with positions and default arm state
-        self.desired_state= np.concatenate([position, self.desired_arm_state])
+        self.desired_state= np.concatenate([desired_position, self.desired_arm_state])
         state.get_mutable_discrete_state(self._desired_state).SetFromVector(self.desired_state)
 
     def planning(self, start, goal, grid_map):
