@@ -122,7 +122,7 @@ try:
     # Add Finite State Machine = TidySpotPlanner
     tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant))
     tidy_spot_planner.set_name("tidy_spot_planner")
-    tidy_spot_planner.connect_components(builder, grasper, dynamic_path_planner, station)
+    tidy_spot_planner.connect_components(builder, grasper, point_cloud_mapper, dynamic_path_planner, station)
 
     # Last component, add state interpolator which converts desired state to desired state and velocity
     state_interpolator = builder.AddSystem(StateInterpolatorWithDiscreteDerivative(10, 0.1, suppress_initial_transient=True))
@@ -188,7 +188,7 @@ try:
         print("---")
 
 
-    simulator.set_monitor(PrintStates)
+    # simulator.set_monitor(PrintStates)
 
     meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 

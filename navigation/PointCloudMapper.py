@@ -21,10 +21,17 @@ class PointCloudMapper(LeafSystem):
         self._cameras = {
             point_cloud_name: station.GetSubsystemByName(f"rgbd_sensor_{point_cloud_name}") for point_cloud_name in camera_names
         }
+        
+        # Input ports
         self._point_cloud_inputs = {
             point_cloud_name: self.DeclareAbstractInputPort(f"{point_cloud_name}.point_cloud", AbstractValue.Make(PointCloud())) for point_cloud_name in camera_names
         }
+        
+        # Output ports
         self.DeclareAbstractOutputPort("grid_map", lambda: AbstractValue.Make(np.full((100, 100), -1)), self.CalcGridMap)
+        self.DeclareAbstractOutputPort("detection_dict", lambda: AbstractValue.Make({}), self.CalcDetectionDict)
+
+
         self.resolution = resolution
         self.robot_radius = robot_radius
         self.grid_map = np.full((100, 100), -1)  # Initialized with a fixed size grid map with unexplored (-1)
@@ -42,6 +49,10 @@ class PointCloudMapper(LeafSystem):
         self.mark_robot_footprint_as_free()
         self.update_grid_map_from_area_graph()  # Update grid_map using area graph
         output.set_value(self.grid_map)
+
+    def CalcDetectionDict(self, context: Context, output: AbstractValue): # TODO: Implement object detection
+        detection_dict = {}
+        output.set_value(detection_dict)
 
     def connect_point_clouds(self, station: Diagram, builder: DiagramBuilder):
         for camera_name in self._camera_names:

@@ -27,12 +27,16 @@ from navigation.DynamicPathPlanner import DynamicPathPlanner
 class SpotState(Enum):
     IDLE = auto() #IDLE is for waiting for the simulation to settle
     EXPLORE = auto()
-    DETECT_OBJECT = auto()
     APPROACH_OBJECT = auto()
     GRASP_OBJECT = auto()
     TRANSPORT_OBJECT = auto()
     DEPOSIT_OBJECT = auto()
     RETURN_TO_IDLE = auto()
+
+class NavigationGoalType(Enum):
+    EXPLORE = auto()
+    APPROACH_OBJECT = auto()
+    DEPOSIT_OBJECT = auto()
 
 # Define the high-level planner for Spot
 class TidySpotPlanner(LeafSystem):
@@ -52,6 +56,7 @@ class TidySpotPlanner(LeafSystem):
         # Input ports
         self._spot_body_state_index = self.DeclareVectorInputPort("body_poses", 20).get_index()
         self._path_planning_desired_index = self.DeclareVectorInputPort("path_planning_desired", 3).get_index()
+        self._detection_dict_input = self.DeclareAbstractInputPort("detection_dict", AbstractValue.Make({}))
 
         # Input ports for various components
         self.DeclareVectorInputPort("object_detected", 1)
@@ -83,7 +88,7 @@ class TidySpotPlanner(LeafSystem):
         self.path_planning_goal = (0, 0, 0)  # Goal for path planning
 
 
-    def connect_components(self, builder, grasper, dynamic_path_planner, station):
+    def connect_components(self, builder, grasper, point_cloud_mapper, dynamic_path_planner, station):
         builder.Connect(station.GetOutputPort("spot.state_estimated"), self.get_input_port(self._spot_body_state_index))
         # builder.Connect(self.get_output_port(self._spot_commanded_state_index), station.GetInputPort("spot.desired_state"))
 
@@ -94,6 +99,9 @@ class TidySpotPlanner(LeafSystem):
         builder.Connect(self.get_output_port(self._path_planning_position_output), dynamic_path_planner.GetInputPort("robot_position"))
         builder.Connect(dynamic_path_planner.GetOutputPort("done_astar"), self.GetInputPort("path_planning_finished"))
         builder.Connect(self.GetOutputPort("use_path_planner"), dynamic_path_planner.GetInputPort("execute_path"))
+
+        # Connect the detection dict to the FSM planner
+        builder.Connect(point_cloud_mapper.GetOutputPort("detection_dict"), self._detection_dict_input) # TODO: Check that output name is correct
 
         # Connect the grasper to the FSM planner
         builder.Connect(self.GetOutputPort("request_grasp"), grasper.GetInputPort("do_grasp"))
