@@ -31,9 +31,16 @@ from pydrake.all import (
     Diagram,
     Rgba,
 )
+from enum import Enum, auto
+
 from navigation.PointCloudMapper import PointCloudMapper
 
 show_animation = True
+
+class NavigationGoalType(Enum):
+    EXPLORE = auto()
+    APPROACH_OBJECT = auto()
+    DEPOSIT_OBJECT = auto()
 
 class DynamicPathPlanner(LeafSystem):
     def __init__(self, station, builder, initial_position, resolution, robot_radius, time_step=0.1, meshcat=None):
@@ -60,6 +67,7 @@ class DynamicPathPlanner(LeafSystem):
         self._done_astar = self.DeclareDiscreteState(1)  # Boolean flag for trajectory update
         self._desired_state = self.DeclareDiscreteState(10)  # Vector of size 20
         self.DeclareStateOutputPort("done_astar", self._done_astar)
+
         # Declare output port for desired state (position and velocity)
         self.DeclareVectorOutputPort(
             "desired_state",
@@ -73,7 +81,7 @@ class DynamicPathPlanner(LeafSystem):
         ).get_index()
         self._goal_input_index = self.DeclareVectorInputPort("goal", 3).get_index()
         self._robot_position_input_index = self.DeclareVectorInputPort("robot_position", 3).get_index()
-        self._execute_path_input_index = self.DeclareVectorInputPort("execute_path", 1).get_index()  # 0 or 1
+        self._execute_path_input_index = self.DeclareVectorInputPort("execute_path", 1).get_index()  # NavigationGoalType: 0, 1 or 2
 
 
         # Trajectory storage
