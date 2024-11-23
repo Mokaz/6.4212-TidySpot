@@ -110,25 +110,24 @@ class TidySpotPlanner(LeafSystem):
     def get_spot_state_input_port(self):
         return self.GetInputPort("body_poses")
 
-    def get_path_planning_finished_input_port(self):
-        return self.GetInputPort("path_planning_finished")
-
     def _initialize_state(self, context: Context, state: State):
         self.robot_state = self.get_spot_state_input_port().Eval(context)
-        state.get_mutable_discrete_state(self._exploring).set_value([0])
+        self.detection_dict = self._detection_dict_input.Eval(context)
+        state.get_mutable_discrete_state(self._exploring).set_value([0]) # TODO Unused?
 
-    def _get_explore_completed(self, context, state):
-        return self.get_path_planning_finished_input_port().Eval(context)[0]
-
+    def _get_navigation_completed(self, context, state):
+        # print(self.GetInputPort("path_planning_finished").Eval(context)[0])
+        return self.GetInputPort("path_planning_finished").Eval(context)[0]
 
     def Update(self, context, state):
-        mode = context.get_abstract_state(int(self._state_index)).get_value()
+        current_state = context.get_abstract_state(int(self._state_index)).get_value()
         self.robot_state = self.get_spot_state_input_port().Eval(context)
+        self.detection_dict = self._detection_dict_input.Eval(context)
         current_time = context.get_time()
         times = context.get_abstract_state(int(self._times_index)).get_value()
 
 
-        if mode == SpotState.IDLE:
+        if current_state == SpotState.IDLE:
             # Start exploring the environment
             print("State: IDLE -> EXPLORE")
 
@@ -138,48 +137,52 @@ class TidySpotPlanner(LeafSystem):
             ).set_value(SpotState.EXPLORE)
 
             # select a new area to explore and go to it
-            new_area = self.explore_environment()
+            self.set_new_random_exploration_goal()
 
-        elif mode == SpotState.EXPLORE:
+        elif current_state == SpotState.EXPLORE:
             # Explore until an object is detected
-            if self._get_explore_completed(context, state):
+            if self._get_navigation_completed(context, state):
                 print("Exploration completed to area.")
-                if self.detect_object():
-                    print("State: EXPLORE -> DETECT_OBJECT")
+                if self.check_detections():
+                    object_index, object_location = list(self.detection_dict.items())[0] # TODO: Make this a function that chooses the best object to approach
+                    print(f"Found {object_index} at {object_location}")
+
+                    self.current_object_location = object_location
+
+                    print("State: EXPLORE -> APPROACH_OBJECT")
+                    self.approach_object(self.current_object_location)
+
                     state.get_mutable_abstract_state(
                         int(self._state_index)
-                    ).set_value(SpotState.DETECT_OBJECT)
+                    ).set_value(SpotState.APPROACH_OBJECT)
                 else:
-                    print("Failed to detect object. Calculate new point for EXPLORE.")
-                    new_area = self.explore_environment()
+                    print("Failed to detect any objects. Calculate new goal for EXPLORE.")
+                    self.set_new_random_exploration_goal()
                     state.get_mutable_abstract_state(
                         int(self._state_index)
                     ).set_value(SpotState.IDLE)
             else:
-                print(f"Exploring area at {self.path_planning_goal}")
-                state.get_mutable_discrete_state(self.use_path_planner).set_value([1])
+                # print(f"Exploring area at {self.path_planning_goal}")
+                # state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.EXPLORE.value])
+                state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.APPROACH_OBJECT.value])
 
-        elif mode == SpotState.DETECT_OBJECT:
-            if self.detected_objects:
-                object_name, object_location = self.detected_objects.pop(0)
-                print(f"Detected {object_name} at {object_location}")
-                state.get_mutable_abstract_state(
-                    int(self._state_index)
-                ).set_value(SpotState.APPROACH_OBJECT)
-                self.current_object_location = object_location
+        elif current_state == SpotState.APPROACH_OBJECT:
+
+            if self._get_navigation_completed(context, state):
+                print("Arrived at object location", self.current_object_location)
+
+
+                # print("State: APPROACH_OBJECT -> GRASP_OBJECT")
+                # state.get_mutable_abstract_state(
+                #     int(self._state_index)
+                # ).set_value(SpotState.GRASP_OBJECT)
+
             else:
-                state.get_mutable_abstract_state(
-                    int(self._state_index)
-                ).set_value(SpotState.EXPLORE)
+                print("Approaching object at ", self.current_object_location)
+                state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.APPROACH_OBJECT.value])
 
-        elif mode == SpotState.APPROACH_OBJECT:
-            self.approach_object(self.current_object_location)
-            print("State: APPROACH_OBJECT -> GRASP_OBJECT")
-            state.get_mutable_abstract_state(
-                int(self._state_index)
-            ).set_value(SpotState.GRASP_OBJECT)
 
-        elif mode == SpotState.GRASP_OBJECT:
+        elif current_state == SpotState.GRASP_OBJECT:
             if self.grasp_object():
                 print("State:  GRASP_OBJECT -> TRANSPORT_OBJECT")
                 state.get_mutable_abstract_state(
@@ -191,21 +194,21 @@ class TidySpotPlanner(LeafSystem):
                     int(self._state_index)
                 ).set_value(SpotState.EXPLORE)
 
-        elif mode == SpotState.TRANSPORT_OBJECT:
+        elif current_state == SpotState.TRANSPORT_OBJECT:
             self.transport_object()
             print("State: TRANSPORT_OBJECT -> DEPOSIT_OBJECT")
             state.get_mutable_abstract_state(
                 int(self._state_index)
             ).set_value(SpotState.DEPOSIT_OBJECT)
 
-        elif mode == SpotState.DEPOSIT_OBJECT:
+        elif current_state == SpotState.DEPOSIT_OBJECT:
             self.deposit_object()
             print("State: DEPOSIT_OBJECT -> RETURN_TO_IDLE")
             state.get_mutable_abstract_state(
                 int(self._state_index)
             ).set_value(SpotState.RETURN_TO_IDLE)
 
-        elif mode == SpotState.RETURN_TO_IDLE:
+        elif current_state == SpotState.RETURN_TO_IDLE:
             print("Returning to IDLE...")
             state.get_mutable_abstract_state(
                 int(self._state_index)
@@ -218,17 +221,23 @@ class TidySpotPlanner(LeafSystem):
         spot_body_pos = self.robot_state[:3]
         output.SetFromVector(spot_body_pos)
 
-    def detect_object(self):
+    def detect_object(self): # TODO: Remove this function
         # We check the segmentation to see if we got any objects
         objects = []
         self.detected_objects.extend(objects)
         if len(self.detected_objects) > 0:
             return True
         return False
+    
+    def check_detections(self):
+        return bool(self.detection_dict)
 
     def approach_object(self, object_location):
-        # Use A* to navigate to the object location
         print(f"Navigating to object at {object_location}")
+
+        self.path_planning_goal
+
+
         # Actual navigation code here
         pass
 
@@ -251,12 +260,11 @@ class TidySpotPlanner(LeafSystem):
         # Actual deposit code here
         pass
 
-    def explore_environment(self):
-        print("Exploring environment...")
-
+    def set_new_random_exploration_goal(self):
         # Random search
-        new_area = (random.uniform(-5.0, 5.0), random.uniform(-5.0, 5.0))
-        self.explored_area.add(new_area)
+        new_goal = (random.uniform(-5.0, 5.0), random.uniform(-5.0, 5.0))
+        self.explored_area.add(new_goal)
 
-        self.path_planning_goal = (new_area[0], new_area[1], 0.0)
-        return self.path_planning_goal
+        print(f"Exploring environment, new exploration goal: {new_goal}")
+
+        self.path_planning_goal = (new_goal[0], new_goal[1], 0.0)
