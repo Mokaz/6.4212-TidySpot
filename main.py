@@ -45,7 +45,7 @@ logger.addFilter(DrakeWarningFilter())
 
 # Use AnyGrasp (TODO: add to args later)
 use_anygrasp = False
-use_grounded_sam = False
+use_grounded_sam = True
 
 try:
     ### Start the visualizer ###
@@ -112,7 +112,7 @@ try:
     # Add point cloud mapper for path planner
     point_cloud_mapper = builder.AddSystem(PointCloudMapper(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.6))
     point_cloud_mapper.set_name("point_cloud_mapper")
-    point_cloud_mapper.connect_point_clouds(station, builder)
+    point_cloud_mapper.connect_point_clouds(point_cloud_cropper, station, builder)
 
     # Add path planner and mapper
     dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, builder, np.array([0,0,0]), resolution=0.1, robot_radius=0.6, meshcat=meshcat))

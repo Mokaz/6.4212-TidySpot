@@ -27,7 +27,7 @@ class ObjectDetector(LeafSystem):
         LeafSystem.__init__(self)
 
         if use_groundedsam:
-            self.grounded_sam = GroundedSAM(groundedsam_path)
+            self.grounded_sam = GroundedSAM(groundedsam_path, device="cpu")
 
         self._camera_names = camera_names
 

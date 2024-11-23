@@ -211,13 +211,12 @@ class TidySpotPlanner(LeafSystem):
         output.SetFromVector(spot_body_pos)
 
     def detect_object(self):
-        # Use Grounded SAM to detect objects
-        print("Detecting objects...")
-        # In the actual implementation, call the detection model here.
-        success = False
+        # We check the segmentation to see if we got any objects
         objects = []
         self.detected_objects.extend(objects)
-        return success
+        if len(self.detected_objects) > 0:
+            return True
+        return False
 
     def approach_object(self, object_location):
         # Use A* to navigate to the object location

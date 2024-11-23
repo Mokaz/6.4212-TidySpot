@@ -13,8 +13,8 @@ warnings.filterwarnings("ignore", message="annotate is deprecated:*")
 warnings.filterwarnings("ignore", message="torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument.*")
 
 class GroundedSAM:
-    def __init__(self, groundedsam_path: str):
-        self.DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    def __init__(self, groundedsam_path: str, device: str = "cuda"):
+        self.DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu') if device == "cuda" else torch.device(device) # only use GPU if cuda is called
         self._setup_groundedsam(groundedsam_path)
         print("GroundedSAM initialized successfully.")
 
@@ -28,7 +28,7 @@ class GroundedSAM:
         SAM_CHECKPOINT_PATH = os.path.join(groundedsam_path, "sam_vit_h_4b8939.pth")
 
         # Building GroundingDINO inference model
-        self.grounding_dino_model = Model(model_config_path=GROUNDING_DINO_CONFIG_PATH, model_checkpoint_path=GROUNDING_DINO_CHECKPOINT_PATH)
+        self.grounding_dino_model = Model(model_config_path=GROUNDING_DINO_CONFIG_PATH, model_checkpoint_path=GROUNDING_DINO_CHECKPOINT_PATH, device=self.DEVICE)
 
         # Building SAM Model and SAM Predictor
         sam = sam_model_registry[SAM_ENCODER_VERSION](checkpoint=SAM_CHECKPOINT_PATH)
@@ -36,19 +36,19 @@ class GroundedSAM:
         self.sam_predictor = SamPredictor(sam)
 
     def detect_and_segment_objects(self, rgb_image: np.ndarray, camera_name: str):
-        # CLASSES = [
-        #     "chips can", "master chef can", "cracker box", "sugar box", "tomato soup can", "mustard bottle",
-        #     "tuna fish can", "pudding box", "gelatin box", "potted meat can", "banana", "strawberry", "apple",
-        #     "lemon", "peach", "pear", "orange", "plum", "pitcher base", "bleach cleanser", "windex bottle",
-        #     "wine glass", "bowl", "mug", "sponge", "skillet", "skillet lid", "plate", "fork", "spoon", "knife",
-        #     "spatula", "power drill", "wood block", "scissors", "padlock", "key", "large marker", "small marker",
-        #     "adjustable wrench", "phillips screwdriver", "flat screwdriver", "plastic bolt", "plastic nut", "hammer",
-        #     "small clamp", "medium clamp", "large clamp", "extra large clamp", "mini soccer ball", "softball",
-        #     "baseball", "tennis ball", "racquetball", "golf ball", "chain", "foam brick", "dice", "marbles", "cups",
-        #     "colored wood blocks", "toy airplane", "lego duplo", "timer", "rubiks cube"
-        # ]
+        CLASSES = [
+            "chips can", "master chef can", "cracker box", "sugar box", "tomato soup can", "mustard bottle",
+            "tuna fish can", "pudding box", "gelatin box", "potted meat can", "banana", "strawberry", "apple",
+            "lemon", "peach", "pear", "orange", "plum", "pitcher base", "bleach cleanser", "windex bottle",
+            "wine glass", "bowl", "mug", "sponge", "skillet", "skillet lid", "plate", "fork", "spoon", "knife",
+            "spatula", "power drill", "wood block", "scissors", "padlock", "key", "large marker", "small marker",
+            "adjustable wrench", "phillips screwdriver", "flat screwdriver", "plastic bolt", "plastic nut", "hammer",
+            "small clamp", "medium clamp", "large clamp", "extra large clamp", "mini soccer ball", "softball",
+            "baseball", "tennis ball", "racquetball", "golf ball", "chain", "foam brick", "dice", "marbles", "cups",
+            "colored wood blocks", "toy airplane", "lego duplo", "timer", "rubiks cube", "red brick",
+        ]
 
-        CLASSES = ["detect the box", "detect the whole object"]
+        # CLASSES = ["detect the box", "detect the whole object"]
 
         BOX_THRESHOLD = 0.5
         TEXT_THRESHOLD = 0.3
@@ -138,7 +138,7 @@ class GroundedSAM:
         bgr_annotated_image = cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR)
         cv2.imwrite("grounded_sam_annotated_image.jpg", bgr_annotated_image)
 
-        
+
         if len(detections.mask) > 0 and len(detections.confidence) > 0:
             mask = detections.mask[0]
             if camera_name == "back":
