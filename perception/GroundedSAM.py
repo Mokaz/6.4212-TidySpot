@@ -59,6 +59,9 @@ class GroundedSAM:
             lower_part = rgb_image[Y_THRESHOLD:, :, :].copy()
             rgb_image = rgb_image[:Y_THRESHOLD, :, :]
 
+        if camera_name in {"frontleft", "frontright"}:
+            rgb_image = np.rot90(rgb_image, k=-1)
+
         # Detect objects using GroundingDINO
         detections = self.grounding_dino_model.predict_with_classes(
             image=rgb_image,  # Use RGB image here
@@ -143,6 +146,8 @@ class GroundedSAM:
             mask = detections.mask[0]
             if camera_name == "back":
                 mask = np.concatenate([mask, np.zeros((80, 640))], axis=0)
+            if camera_name in {"frontleft", "frontright"}:
+                mask = np.rot90(mask, k=1)
             return mask, detections.confidence[0]
         else:
             return None, None

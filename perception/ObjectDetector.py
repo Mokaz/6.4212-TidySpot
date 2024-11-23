@@ -102,8 +102,11 @@ class ObjectDetector(LeafSystem):
     def test_segmentation(self, object_detector_context: Context, camera_name):
         rgb_image = cv2.cvtColor(self.get_color_image(camera_name, object_detector_context).data, cv2.COLOR_RGBA2RGB)
         mask, confidence = self.grounded_sam.detect_and_segment_objects(rgb_image, camera_name)
-        print("Mask shape:", mask.shape)
-        print(camera_name, " segmentation test complete")
+        if mask is None:
+            print(camera_name, " segmentation failed, no object detections found")
+        else:
+            print("Mask shape:", mask.shape)
+            print(camera_name, " segmentation test complete")
 
     def connect_cameras(self, station: Diagram, builder: DiagramBuilder):
         for camera_name in self._camera_names:
