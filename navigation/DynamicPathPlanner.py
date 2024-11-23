@@ -115,20 +115,24 @@ class DynamicPathPlanner(LeafSystem):
 
     def UpdateTrajectory(self, context: Context, state):
         """Generate or update the trajectory based on the FSM flag and goal."""
-        execute_path = bool(self.get_input_port(self._execute_path_input_index).Eval(context)[0])
+        execute_path = int(self.get_input_port(self._execute_path_input_index).Eval(context)[0])
         current_position = self.EvalVectorInput(context, self._robot_position_input_index).get_value()
 
         # Default to staying still
         desired_position = current_position[:3]
         state.get_mutable_discrete_state(self._done_astar).set_value([0])
 
+
         if execute_path:
+            # print("Execute path:", execute_path)
             goal = self.EvalVectorInput(context, self._goal_input_index).get_value()
 
             # Check if we've reached the goal
             distance_to_goal = np.linalg.norm(goal[:2] - current_position[:2])
-            if distance_to_goal < 0.1:  # 10cm threshold
-                # We've reached the goal
+
+            threshold = 0.1 if execute_path == NavigationGoalType.EXPLORE.value else 0.5 # Stop with 10 cm threshold when exploring, 30 cm threshold when approaching object
+            if distance_to_goal < threshold:
+                print("Reached goal with threshold:", threshold)
                 state.get_mutable_discrete_state(self._done_astar).set_value([1])
 
             elif self.waypoints is None:
