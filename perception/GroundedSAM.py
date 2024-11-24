@@ -36,19 +36,19 @@ class GroundedSAM:
         self.sam_predictor = SamPredictor(sam)
 
     def detect_and_segment_objects(self, rgb_image: np.ndarray, camera_name: str):
-        CLASSES = [
-            "chips can", "master chef can", "cracker box", "sugar box", "tomato soup can", "mustard bottle",
-            "tuna fish can", "pudding box", "gelatin box", "potted meat can", "banana", "strawberry", "apple",
-            "lemon", "peach", "pear", "orange", "plum", "pitcher base", "bleach cleanser", "windex bottle",
-            "wine glass", "bowl", "mug", "sponge", "skillet", "skillet lid", "plate", "fork", "spoon", "knife",
-            "spatula", "power drill", "wood block", "scissors", "padlock", "key", "large marker", "small marker",
-            "adjustable wrench", "phillips screwdriver", "flat screwdriver", "plastic bolt", "plastic nut", "hammer",
-            "small clamp", "medium clamp", "large clamp", "extra large clamp", "mini soccer ball", "softball",
-            "baseball", "tennis ball", "racquetball", "golf ball", "chain", "foam brick", "dice", "marbles", "cups",
-            "colored wood blocks", "toy airplane", "lego duplo", "timer", "rubiks cube", "red brick",
-        ]
+        # CLASSES = [
+        #     "chips can", "master chef can", "cracker box", "sugar box", "tomato soup can", "mustard bottle",
+        #     "tuna fish can", "pudding box", "gelatin box", "potted meat can", "banana", "strawberry", "apple",
+        #     "lemon", "peach", "pear", "orange", "plum", "pitcher base", "bleach cleanser", "windex bottle",
+        #     "wine glass", "bowl", "mug", "sponge", "skillet", "skillet lid", "plate", "fork", "spoon", "knife",
+        #     "spatula", "power drill", "wood block", "scissors", "padlock", "key", "large marker", "small marker",
+        #     "adjustable wrench", "phillips screwdriver", "flat screwdriver", "plastic bolt", "plastic nut", "hammer",
+        #     "small clamp", "medium clamp", "large clamp", "extra large clamp", "mini soccer ball", "softball",
+        #     "baseball", "tennis ball", "racquetball", "golf ball", "chain", "foam brick", "dice", "marbles", "cups",
+        #     "colored wood blocks", "toy airplane", "lego duplo", "timer", "rubiks cube", "red brick",
+        # ]
 
-        # CLASSES = ["detect the box", "detect the whole object"]
+        CLASSES = ["detect the box", "detect the whole object"]
 
         BOX_THRESHOLD = 0.5
         TEXT_THRESHOLD = 0.3

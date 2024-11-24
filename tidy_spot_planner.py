@@ -137,11 +137,12 @@ class TidySpotPlanner(LeafSystem):
                 int(self._state_index)
             ).set_value(SpotState.EXPLORE)
 
-        elif current_state == SpotState.EXPLORE:
+        elif current_state == SpotState.EXPLORE: # TODO: Handle case where object is detected during exploration
             # Explore until an object is detected
             if self._get_navigation_completed(context, state):
                 state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.STOP.value])
                 print("ASTAR DONE RECEIVED: Exploration completed to area.")
+                
                 if self.check_detections():
                     grid_points, centroid = self.object_clusters.items()[0].items() # TODO: Make this a function that chooses the best object to approach
                     print(f"Found object 0 at {centroid['world']}")
@@ -162,18 +163,17 @@ class TidySpotPlanner(LeafSystem):
                     ).set_value(SpotState.IDLE)
             else:
                 # print(f"Exploring area at {self.path_planning_goal}")
-                # state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.EXPLORE.value])
-                state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.APPROACH_OBJECT.value]) # TODO: TEST
+                state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.EXPLORE.value])
 
         elif current_state == SpotState.APPROACH_OBJECT:
-
             if self._get_navigation_completed(context, state):
+                state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.STOP.value])
                 print("Arrived at object location", self.current_object_location)
 
-                # print("State: APPROACH_OBJECT -> GRASP_OBJECT")
-                # state.get_mutable_abstract_state(
-                #     int(self._state_index)
-                # ).set_value(SpotState.GRASP_OBJECT)
+                print("State: APPROACH_OBJECT -> GRASP_OBJECT")
+                state.get_mutable_abstract_state(
+                    int(self._state_index)
+                ).set_value(SpotState.GRASP_OBJECT)
 
             else:
                 print("Approaching object at ", self.current_object_location)
@@ -182,6 +182,8 @@ class TidySpotPlanner(LeafSystem):
 
         elif current_state == SpotState.GRASP_OBJECT:
             if self.grasp_object():
+                print("Grasping object successful.")
+
                 print("State:  GRASP_OBJECT -> TRANSPORT_OBJECT")
                 state.get_mutable_abstract_state(
                     int(self._state_index)
@@ -218,26 +220,12 @@ class TidySpotPlanner(LeafSystem):
     def CalcPathPlanningPosition(self, context, output):
         spot_body_pos = self.robot_state[:3]
         output.SetFromVector(spot_body_pos)
-
-    def detect_object(self): # TODO: Remove this function
-        # We check the segmentation to see if we got any objects
-        objects = []
-        self.detected_objects.extend(objects)
-        if len(self.detected_objects) > 0:
-            return True
-        return False
     
     def check_detections(self):
         return bool(self.object_clusters)
 
     def approach_object(self, object_location):
-        print(f"Navigating to object at {object_location}")
-
-        self.path_planning_goal
-
-
-        # Actual navigation code here
-        pass
+        self.path_planning_goal = (object_location[0], object_location[1], None)
 
     def grasp_object(self):
         # Grasp the object using AnyGrasp or other methods

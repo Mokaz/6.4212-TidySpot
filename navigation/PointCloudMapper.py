@@ -14,7 +14,7 @@ from pydrake.all import (
 from typing import List, Tuple, Dict
 from scipy.ndimage import label
 
-ADD_DETECTIONS_TO_GRIDMAP = False
+ADD_DETECTIONS_TO_GRIDMAP = True
 VISUALIZE_GRID_MAP = False
 
 class PointCloudMapper(LeafSystem):
