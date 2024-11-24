@@ -14,6 +14,9 @@ from pydrake.all import (
 from typing import List, Tuple, Dict
 from scipy.ndimage import label
 
+ADD_DETECTIONS_TO_GRIDMAP = True
+VISUALIZE_GRID_MAP = False
+
 class PointCloudMapper(LeafSystem):
     def __init__(self, station: Diagram, camera_names: List[str], point_clouds, resolution, robot_radius, height_threshold=0.1):
         LeafSystem.__init__(self)
@@ -22,12 +25,17 @@ class PointCloudMapper(LeafSystem):
         self._cameras = {
             point_cloud_name: station.GetSubsystemByName(f"rgbd_sensor_{point_cloud_name}") for point_cloud_name in camera_names
         }
+        
+        # Input ports
         self._point_cloud_inputs = {
             point_cloud_name: self.DeclareAbstractInputPort(f"{point_cloud_name}.point_cloud", AbstractValue.Make(PointCloud())) for point_cloud_name in camera_names
         }
         self._object_point_cloud = self.DeclareAbstractInputPort(f"cropped_point_cloud", AbstractValue.Make(PointCloud()))
+
+        # Output ports
         self.DeclareAbstractOutputPort("grid_map", lambda: AbstractValue.Make(np.full((100, 100), -1)), self.CalcGridMap)
         self.DeclareAbstractOutputPort("object_clusters", lambda: AbstractValue.Make({}), self.CalcObjectClusters)
+
         self.resolution = resolution
         self.robot_radius = robot_radius
         self.grid_map = np.full((100, 100), -1)  # Initialized with a fixed size grid map with unexplored (-1)
@@ -51,15 +59,17 @@ class PointCloudMapper(LeafSystem):
             self.grid_map = self.update_grid_map(self.grid_map, ox, oy, free_ox, free_oy, value=1)  # Mark obstacles with value 1
             self.update_area_graph(ox, oy)  # Update the area graph with new obstacles
 
-        # Process object point cloud to mark objects
-        object_point_cloud = self._object_point_cloud.Eval(context).xyzs()
-        valid_object_points = object_point_cloud[:, np.isfinite(object_point_cloud).all(axis=0)]  # Filter points that are finite
-        ox, oy, _, _ = self.pointcloud_to_grid(valid_object_points)  # Convert to grid (objects only)
-        self.grid_map = self.update_grid_map(self.grid_map, ox, oy, [], [], value=2)  # Mark objects with value 2
+        if ADD_DETECTIONS_TO_GRIDMAP:
+            # Process object point cloud to mark objects
+            object_point_cloud = self._object_point_cloud.Eval(context).xyzs()
+            valid_object_points = object_point_cloud[:, np.isfinite(object_point_cloud).all(axis=0)]  # Filter points that are finite
+            ox, oy, _, _ = self.pointcloud_to_grid(valid_object_points)  # Convert to grid (objects only)
+            self.grid_map = self.update_grid_map(self.grid_map, ox, oy, [], [], value=2)  # Mark objects with value 2
 
         self.mark_robot_footprint_as_free()
         self.update_grid_map_from_area_graph()  # Update grid_map using area graph
-        self.visualize_grid_map()  # Visualize the grid map
+        if VISUALIZE_GRID_MAP:
+            self.visualize_grid_map()  # Visualize the grid map
         self.cluster_objects()  # Cluster objects in the grid map
         output.set_value(self.grid_map)
 

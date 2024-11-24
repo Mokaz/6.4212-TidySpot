@@ -46,6 +46,7 @@ logger.addFilter(DrakeWarningFilter())
 # Use AnyGrasp (TODO: add to args later)
 use_anygrasp = False
 use_grounded_sam = True
+device = "cuda" # Choose between "cpu" and "cuda"
 
 try:
     ### Start the visualizer ###
@@ -70,7 +71,8 @@ try:
             image_size = (camera_config.width, camera_config.height)
 
     ### Add objects to scene ###
-    scenario = AppendDirectives(scenario, filename="objects/added_object_directives.yaml")
+    # scenario = AppendDirectives(scenario, filename="objects/added_object_directives.yaml")
+    scenario = AppendDirectives(scenario, filename="objects/simple_cracker_box_detection_test.yaml")
 
     station = builder.AddSystem(MakeHardwareStation(
         scenario=scenario,
@@ -86,7 +88,7 @@ try:
     plant = station.GetSubsystemByName("plant")
 
     # Instantiate ObjectDetector with station and camera_names
-    object_detector = builder.AddSystem(ObjectDetector(station, camera_names, image_size, use_grounded_sam))
+    object_detector = builder.AddSystem(ObjectDetector(station, camera_names, image_size, use_grounded_sam, device=device))
     object_detector.set_name("object_detector")
     object_detector.connect_cameras(station, builder)
 
@@ -122,7 +124,7 @@ try:
     # Add Finite State Machine = TidySpotPlanner
     tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant))
     tidy_spot_planner.set_name("tidy_spot_planner")
-    tidy_spot_planner.connect_components(builder, grasper, dynamic_path_planner, station)
+    tidy_spot_planner.connect_components(builder, grasper, point_cloud_mapper, dynamic_path_planner, station)
 
     # Last component, add state interpolator which converts desired state to desired state and velocity
     state_interpolator = builder.AddSystem(StateInterpolatorWithDiscreteDerivative(10, 0.1, suppress_initial_transient=True))
@@ -188,12 +190,12 @@ try:
         print("---")
 
 
-    simulator.set_monitor(PrintStates)
+    # simulator.set_monitor(PrintStates)
 
     meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 
     meshcat.StartRecording()
-    simulator.AdvanceTo(100.0)
+    simulator.AdvanceTo(10.0)
 
     ################
     ### TESTZONE ###
@@ -209,6 +211,21 @@ try:
 
     # # Test anygrasp on frontleft camera
     # grasp_selector.test_anygrasp_frontleft_pcd(to_point_cloud, context)
+
+    # # Test segmentation on camera
+    
+    # object_detector.test_segmentation(object_detector_context, "frontleft")
+
+    # # Test cropping from segmentation on frontleft camera
+    # pcd_cropper_context = point_cloud_cropper.GetMyMutableContextFromRoot(context)
+    # point_cloud_cropper.test_frontleft_crop_from_segmentation(pcd_cropper_context)
+
+    # Test anygrasp on segmented point cloud
+    # grasp_selector.test_anygrasp_frontleft_segmented_pcd(grasp_selector.GetMyMutableContextFromRoot(context))
+
+    # Test grasp selection
+    # grasp_pose = grasper.GetGraspSelection(grasper.GetMyMutableContextFromRoot(context))
+    # AddMeshcatTriad(meshcat, "grasp_pose", length=0.1, radius=0.006, X_PT=grasp_pose)
 
     # # Keep meshcat alive
     meshcat.PublishRecording()
