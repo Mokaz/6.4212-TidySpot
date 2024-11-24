@@ -14,6 +14,9 @@ from pydrake.all import (
 from typing import List, Tuple, Dict
 from scipy.ndimage import label
 
+ADD_DETECTIONS_TO_GRIDMAP = False
+VISUALIZE_GRID_MAP = False
+
 class PointCloudMapper(LeafSystem):
     def __init__(self, station: Diagram, camera_names: List[str], point_clouds, resolution, robot_radius, height_threshold=0.1):
         LeafSystem.__init__(self)
@@ -56,15 +59,17 @@ class PointCloudMapper(LeafSystem):
             self.grid_map = self.update_grid_map(self.grid_map, ox, oy, free_ox, free_oy, value=1)  # Mark obstacles with value 1
             self.update_area_graph(ox, oy)  # Update the area graph with new obstacles
 
-        # Process object point cloud to mark objects
-        object_point_cloud = self._object_point_cloud.Eval(context).xyzs()
-        valid_object_points = object_point_cloud[:, np.isfinite(object_point_cloud).all(axis=0)]  # Filter points that are finite
-        ox, oy, _, _ = self.pointcloud_to_grid(valid_object_points)  # Convert to grid (objects only)
-        self.grid_map = self.update_grid_map(self.grid_map, ox, oy, [], [], value=2)  # Mark objects with value 2
+        if ADD_DETECTIONS_TO_GRIDMAP:
+            # Process object point cloud to mark objects
+            object_point_cloud = self._object_point_cloud.Eval(context).xyzs()
+            valid_object_points = object_point_cloud[:, np.isfinite(object_point_cloud).all(axis=0)]  # Filter points that are finite
+            ox, oy, _, _ = self.pointcloud_to_grid(valid_object_points)  # Convert to grid (objects only)
+            self.grid_map = self.update_grid_map(self.grid_map, ox, oy, [], [], value=2)  # Mark objects with value 2
 
         self.mark_robot_footprint_as_free()
         self.update_grid_map_from_area_graph()  # Update grid_map using area graph
-        self.visualize_grid_map()  # Visualize the grid map
+        if VISUALIZE_GRID_MAP:
+            self.visualize_grid_map()  # Visualize the grid map
         self.cluster_objects()  # Cluster objects in the grid map
         output.set_value(self.grid_map)
 

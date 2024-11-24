@@ -34,6 +34,7 @@ class SpotState(Enum):
     RETURN_TO_IDLE = auto()
 
 class NavigationGoalType(Enum):
+    STOP = 0
     EXPLORE = auto()
     APPROACH_OBJECT = auto()
     DEPOSIT_OBJECT = auto()
@@ -56,7 +57,7 @@ class TidySpotPlanner(LeafSystem):
         # Input ports
         self._spot_body_state_index = self.DeclareVectorInputPort("body_poses", 20).get_index()
         self._path_planning_desired_index = self.DeclareVectorInputPort("path_planning_desired", 3).get_index()
-        self._detection_dict_input = self.DeclareAbstractInputPort("detection_dict", AbstractValue.Make({}))
+        self._object_clusters_input = self.DeclareAbstractInputPort("detection_dict", AbstractValue.Make({}))
 
         # Input ports for various components
         self.DeclareVectorInputPort("object_detected", 1)
@@ -101,7 +102,7 @@ class TidySpotPlanner(LeafSystem):
         builder.Connect(self.GetOutputPort("use_path_planner"), dynamic_path_planner.GetInputPort("execute_path"))
 
         # Connect the detection dict to the FSM planner
-        builder.Connect(point_cloud_mapper.GetOutputPort("detection_dict"), self._detection_dict_input) # TODO: Check that output name is correct
+        builder.Connect(point_cloud_mapper.GetOutputPort("object_clusters"), self._object_clusters_input) # TODO: Check that output name is correct
 
         # Connect the grasper to the FSM planner
         builder.Connect(self.GetOutputPort("request_grasp"), grasper.GetInputPort("do_grasp"))
@@ -112,65 +113,62 @@ class TidySpotPlanner(LeafSystem):
 
     def _initialize_state(self, context: Context, state: State):
         self.robot_state = self.get_spot_state_input_port().Eval(context)
-        self.detection_dict = self._detection_dict_input.Eval(context)
+        self.object_clusters = self._object_clusters_input.Eval(context)
         state.get_mutable_discrete_state(self._exploring).set_value([0]) # TODO Unused?
 
     def _get_navigation_completed(self, context, state):
-        # print(self.GetInputPort("path_planning_finished").Eval(context)[0])
         return self.GetInputPort("path_planning_finished").Eval(context)[0]
 
     def Update(self, context, state):
         current_state = context.get_abstract_state(int(self._state_index)).get_value()
         self.robot_state = self.get_spot_state_input_port().Eval(context)
-        self.detection_dict = self._detection_dict_input.Eval(context)
+        self.object_clusters = self._object_clusters_input.Eval(context)
         current_time = context.get_time()
         times = context.get_abstract_state(int(self._times_index)).get_value()
 
-
         if current_state == SpotState.IDLE:
-            # Start exploring the environment
-            print("State: IDLE -> EXPLORE")
+            state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.STOP.value])
+            
+            # select a new area to explore and go to it
+            self.set_new_random_exploration_goal()
 
-            state.get_mutable_discrete_state(self.use_path_planner).set_value([0])
+            print("State: IDLE -> EXPLORE")
             state.get_mutable_abstract_state(
                 int(self._state_index)
             ).set_value(SpotState.EXPLORE)
 
-            # select a new area to explore and go to it
-            self.set_new_random_exploration_goal()
-
         elif current_state == SpotState.EXPLORE:
             # Explore until an object is detected
             if self._get_navigation_completed(context, state):
-                print("Exploration completed to area.")
+                state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.STOP.value])
+                print("ASTAR DONE RECEIVED: Exploration completed to area.")
                 if self.check_detections():
-                    object_index, object_location = list(self.detection_dict.items())[0] # TODO: Make this a function that chooses the best object to approach
-                    print(f"Found {object_index} at {object_location}")
+                    grid_points, centroid = self.object_clusters.items()[0].items() # TODO: Make this a function that chooses the best object to approach
+                    print(f"Found object 0 at {centroid['world']}")
 
-                    self.current_object_location = object_location
+                    self.current_object_location = centroid["world"]
 
-                    print("State: EXPLORE -> APPROACH_OBJECT")
                     self.approach_object(self.current_object_location)
 
+                    print("State: EXPLORE -> APPROACH_OBJECT")
                     state.get_mutable_abstract_state(
                         int(self._state_index)
                     ).set_value(SpotState.APPROACH_OBJECT)
                 else:
-                    print("Failed to detect any objects. Calculate new goal for EXPLORE.")
-                    self.set_new_random_exploration_goal()
+                    print("Failed to detect any objects. Transitioning to IDLE to generate new area to explore.")
+                    print("State: EXPLORE -> IDLE")
                     state.get_mutable_abstract_state(
                         int(self._state_index)
                     ).set_value(SpotState.IDLE)
             else:
                 # print(f"Exploring area at {self.path_planning_goal}")
                 # state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.EXPLORE.value])
-                state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.APPROACH_OBJECT.value])
+                state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.APPROACH_OBJECT.value]) # TODO: TEST
 
         elif current_state == SpotState.APPROACH_OBJECT:
 
             if self._get_navigation_completed(context, state):
                 print("Arrived at object location", self.current_object_location)
-
 
                 # print("State: APPROACH_OBJECT -> GRASP_OBJECT")
                 # state.get_mutable_abstract_state(
@@ -230,7 +228,7 @@ class TidySpotPlanner(LeafSystem):
         return False
     
     def check_detections(self):
-        return bool(self.detection_dict)
+        return bool(self.object_clusters)
 
     def approach_object(self, object_location):
         print(f"Navigating to object at {object_location}")
@@ -267,4 +265,4 @@ class TidySpotPlanner(LeafSystem):
 
         print(f"Exploring environment, new exploration goal: {new_goal}")
 
-        self.path_planning_goal = (new_goal[0], new_goal[1], 0.0)
+        self.path_planning_goal = (new_goal[0], new_goal[1], None)
