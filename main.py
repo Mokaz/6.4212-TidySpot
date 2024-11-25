@@ -7,7 +7,6 @@ from pydrake.all import (
 from manipulation import FindResource, running_as_notebook
 
 from manipulation.station import (
-    AddPointClouds,
     AppendDirectives,
     LoadScenario,
     MakeHardwareStation,
