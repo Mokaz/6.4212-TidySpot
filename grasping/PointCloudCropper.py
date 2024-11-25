@@ -17,9 +17,10 @@ import open3d as o3d
 from typing import List, Tuple, Mapping
 
 class PointCloudCropper(LeafSystem):
-    def __init__(self, camera_names: List[str]):
+    def __init__(self, camera_names: List[str], meshcat=None):
         LeafSystem.__init__(self)
         self._camera_names = camera_names
+        self.meshcat = meshcat
 
         # Input ports
         self._pcd_inputs_indexes = {
@@ -57,6 +58,9 @@ class PointCloudCropper(LeafSystem):
         
         point_cloud = self.get_input_port(self._pcd_inputs_indexes[camera_name]).Eval(context)
 
+        # DEBUG: Visualize the original point cloud
+        # self.meshcat.SetObject("original_full_point_cloud", point_cloud)
+
         points = point_cloud.xyzs().T.astype(np.float32)
         colors = point_cloud.rgbs().T.astype(np.float32) / 255.0
 
@@ -73,7 +77,7 @@ class PointCloudCropper(LeafSystem):
         segmented_point_cloud.mutable_rgbs()[:] = (segmented_colors.T * 255.0).astype(np.uint8)
 
         output.set_value(segmented_point_cloud)
-        # print("PointCloudCropper: CropPointCloudBySegmentation point cloud set")
+        # print("PointCloudCropper: CropPointCloudBySegmentation, sending to PointCloudMapper")
 
     def connect_ports(self, to_point_cloud: Mapping[str, DepthImageToPointCloud], object_detector, builder: DiagramBuilder):
         for camera_name in self._camera_names:

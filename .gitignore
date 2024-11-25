@@ -7,6 +7,9 @@ Grounded-Segment-Anything
 *.jpg
 *.svg
 
+# Anygrasp temporary files
+.TimeRecord
+
 # Compiled source #
 ###################
 *.com

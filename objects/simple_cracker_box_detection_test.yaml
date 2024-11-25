@@ -46,5 +46,14 @@ directives:
     file: package://manipulation/hydro/003_cracker_box.sdf
     default_free_body_pose:
         base_link_cracker:
-            translation: [3, 0, 0.1]
-            rotation: !Rpy { deg: [90, 180, -90]}
+            translation: [0, 3, 0.1]
+            rotation: !Rpy { deg: [90, 180, 0]}
+- add_model:
+    name: planar_bin
+    file: package://TidySpot_objects/bin.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: planar_bin::bin_base
+    X_PC:
+        translation: [0, -3, 0]
+        rotation: !Rpy { deg: [0, 0, 90]}

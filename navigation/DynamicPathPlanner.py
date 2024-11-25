@@ -101,7 +101,6 @@ class DynamicPathPlanner(LeafSystem):
         self.goal = None
 
         # Visualization elements
-        self.visualize_path = []
         if self.meshcat:
             self.visualize_path = "planned_path"
             self.visualize_position = "current_position"
@@ -133,8 +132,8 @@ class DynamicPathPlanner(LeafSystem):
         done_astar = context.get_discrete_state(self._done_astar).get_value()[0]
 
         if self.goal is not None:
-            # Use old goal as desired position
-            desired_position = self.goal
+            # Use old goal as desired position with curent heading
+            desired_position = (self.goal[0], self.goal[1], current_position[2])
         else:
             desired_position = current_position[:3]
 
@@ -144,6 +143,7 @@ class DynamicPathPlanner(LeafSystem):
                 # Set the goal when execute_path goes from 0 to non-zero
                 # print("RISING EDGE: Setting new goal")
                 self.goal = self.EvalVectorInput(context, self._goal_input_index).get_value().copy()
+                # print("Received New goal: ({:.3f}, {:.3f}, {:.3f})".format(*self.goal))
 
                 if self.meshcat:
                     add_sphere_to_meshcat_xy_plane(self.meshcat, "goal_original", self.goal, radius=0.05, rgba=[0, 0, 1, 1])
@@ -155,7 +155,7 @@ class DynamicPathPlanner(LeafSystem):
                     if distance_to_goal > approach_distance:
                         adjusted_goal_position = current_position[:2] + (direction_vector / distance_to_goal) * (distance_to_goal - approach_distance)
                         self.goal[:2] = adjusted_goal_position
-                        # print(f"Adjusted goal position for approach: {goal[:2]}")
+                        # print(f"Adjusted goal position for approach: {self.goal[:2]}")
                     else:
                         print("Already within approach distance of object. Ending approach.")
                         state.get_mutable_discrete_state(self._done_astar).set_value([1])
@@ -286,6 +286,8 @@ class DynamicPathPlanner(LeafSystem):
 
         if self.meshcat:
             add_sphere_to_meshcat_xy_plane(self.meshcat, self.visualize_desired_position, desired_position[:2], radius=0.05, rgba=[1, 1, 0, 1])
+
+        # print("Desired position: ({:.3f}, {:.3f}, {:.3f})".format(*desired_position))
 
         # Update the desired state with positions and default arm state
         self.desired_state = np.concatenate([desired_position, self.desired_arm_state])

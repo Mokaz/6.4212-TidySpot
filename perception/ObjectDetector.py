@@ -23,7 +23,9 @@ import cv2
 import numpy as np
 
 class ObjectDetector(LeafSystem):
-    def __init__(self, station: Diagram, camera_names: List[str], image_size: Tuple[int, int], use_groundedsam: bool, groundedsam_path: str = os.path.join(os.getcwd(), "third_party/Grounded-Segment-Anything"), device: str = "cpu"):
+    def __init__(self, station: Diagram, camera_names: List[str], image_size: Tuple[int, int], 
+                 use_groundedsam: bool, groundedsam_path: str = os.path.join(os.getcwd(), "third_party/Grounded-Segment-Anything"), 
+                 device: str = "cpu"):
         LeafSystem.__init__(self)
 
         if use_groundedsam:
@@ -71,6 +73,7 @@ class ObjectDetector(LeafSystem):
             mask, confidence = self.grounded_sam.detect_and_segment_objects(rgb_image, camera_name)
 
     def SegmentFrontCameras(self, context: Context, output):
+        # print("ObjectDetector: SegmentFrontCameras")
         frontleft_rgb_image = cv2.cvtColor(self.get_color_image("frontleft", context).data, cv2.COLOR_RGBA2RGB)
         frontright_rgb_image = cv2.cvtColor(self.get_color_image("frontright", context).data, cv2.COLOR_RGBA2RGB)
 
@@ -87,6 +90,7 @@ class ObjectDetector(LeafSystem):
 
         if valid_masks:
             # Select the mask with the highest confidence
+            # print("Detected object! Sending mask to PointCloudCropper")
             segmentation_mask, _, camera_name = max(valid_masks, key=lambda x: x[1])
         else:
             segmentation_mask = np.array([])

@@ -69,8 +69,8 @@ class TidySpotPlanner(LeafSystem):
         # Declare output ports for the path planner. The path planner then sends to the actual robot
         self.use_path_planner = self.DeclareDiscreteState(1)
         self.DeclareStateOutputPort("use_path_planner", self.use_path_planner)
-        self._path_planning_goal_output = self.DeclareVectorOutputPort("path_planning_goal", 3, self.CalcPathPlanningGoal).get_index()
-        self._path_planning_position_output = self.DeclareVectorOutputPort("path_planning_position", 3, self.CalcPathPlanningPosition).get_index()
+        self._path_planning_goal_output = self.DeclareVectorOutputPort("path_planning_goal", 3, self.SetPathPlanningGoal).get_index()
+        self._path_planning_position_output = self.DeclareVectorOutputPort("path_planning_position", 3, self.SetPathPlanningCurrentPosition).get_index()
 
         # Output ports for various components
         self.DeclareVectorOutputPort("request_grasp", 1, lambda context, output: print("Setting request_grasp output...")) # TODO: Replace lambda with function that sets output based on criteria (attempth count etc.)
@@ -85,7 +85,7 @@ class TidySpotPlanner(LeafSystem):
         # Declare internal variables
         self.detected_objects = []
         self.explored_area = set()  # Grid to track explored areas
-        self.bin_location = (0, 0)  # Assume bin is at a fixed location
+        self.bin_location = (0, -3)  # Assume bin is at a fixed location
         self.path_planning_goal = (0, 0, 0)  # Goal for path planning
 
 
@@ -117,7 +117,9 @@ class TidySpotPlanner(LeafSystem):
         state.get_mutable_discrete_state(self._exploring).set_value([0]) # TODO Unused?
 
     def _get_navigation_completed(self, context, state):
-        return self.GetInputPort("path_planning_finished").Eval(context)[0]
+        use_path_planner = state.get_mutable_discrete_state(self.use_path_planner).get_value()[0]
+        done_astar = self.GetInputPort("path_planning_finished").Eval(context)[0]
+        return done_astar and use_path_planner
 
     def Update(self, context, state):
         current_state = context.get_abstract_state(int(self._state_index)).get_value()
@@ -130,7 +132,8 @@ class TidySpotPlanner(LeafSystem):
             state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.STOP.value])
             
             # select a new area to explore and go to it
-            self.set_new_random_exploration_goal()
+            # self.set_new_random_exploration_goal()
+            self.set_new_exploration_goal((0, 1, None))
 
             print("State: IDLE -> EXPLORE")
             state.get_mutable_abstract_state(
@@ -145,7 +148,7 @@ class TidySpotPlanner(LeafSystem):
                 
                 if self.check_detections():
                     grid_points, centroid = self.object_clusters[1].values() # if object_clusters exists, there will always be one with key value 1
-                    print(f"Found object 0 at {centroid['world']}")
+                    print(f"Found object at {centroid['world']}, approaching ...")
 
                     self.current_object_location = centroid["world"]
 
@@ -168,7 +171,7 @@ class TidySpotPlanner(LeafSystem):
         elif current_state == SpotState.APPROACH_OBJECT:
             if self._get_navigation_completed(context, state):
                 state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.STOP.value])
-                print("Arrived at object location", self.current_object_location)
+                print("Arrived at grasp location, ready to pick object at ", self.current_object_location)
 
                 print("State: APPROACH_OBJECT -> GRASP_OBJECT")
                 state.get_mutable_abstract_state(
@@ -176,13 +179,16 @@ class TidySpotPlanner(LeafSystem):
                 ).set_value(SpotState.GRASP_OBJECT)
 
             else:
-                print("Approaching object at ", self.current_object_location)
+                # print("Approaching object at ", self.current_object_location)
                 state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.APPROACH_OBJECT.value])
 
 
         elif current_state == SpotState.GRASP_OBJECT:
             if self.grasp_object():
                 print("Grasping object successful.")
+
+                print(f"Transporting object to bin at {self.bin_location} ...")
+                self.transport_object()
 
                 print("State:  GRASP_OBJECT -> TRANSPORT_OBJECT")
                 state.get_mutable_abstract_state(
@@ -195,11 +201,18 @@ class TidySpotPlanner(LeafSystem):
                 ).set_value(SpotState.EXPLORE)
 
         elif current_state == SpotState.TRANSPORT_OBJECT:
-            self.transport_object()
-            print("State: TRANSPORT_OBJECT -> DEPOSIT_OBJECT")
-            state.get_mutable_abstract_state(
-                int(self._state_index)
-            ).set_value(SpotState.DEPOSIT_OBJECT)
+            if self._get_navigation_completed(context, state):
+                state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.STOP.value])
+                print("Arrived at bin location, ready to drop object at ", self.bin_location)
+
+                print("State: TRANSPORT_OBJECT -> DEPOSIT_OBJECT")
+                state.get_mutable_abstract_state(
+                    int(self._state_index)
+                ).set_value(SpotState.DEPOSIT_OBJECT)
+
+            else:
+                # print("Approaching bin at ", self.bin_location)
+                state.get_mutable_discrete_state(self.use_path_planner).set_value([NavigationGoalType.APPROACH_OBJECT.value])
 
         elif current_state == SpotState.DEPOSIT_OBJECT:
             self.deposit_object()
@@ -214,14 +227,15 @@ class TidySpotPlanner(LeafSystem):
                 int(self._state_index)
             ).set_value(SpotState.IDLE)
 
-    def CalcPathPlanningGoal(self, context, output):
+    def SetPathPlanningGoal(self, context, output):
         output.SetFromVector(self.path_planning_goal)
 
-    def CalcPathPlanningPosition(self, context, output):
+    def SetPathPlanningCurrentPosition(self, context, output):
         spot_body_pos = self.robot_state[:3]
         output.SetFromVector(spot_body_pos)
     
     def check_detections(self):
+        # print("self.object_clusters:", self.object_clusters)
         return bool(self.object_clusters)
 
     def approach_object(self, object_location):
@@ -235,10 +249,7 @@ class TidySpotPlanner(LeafSystem):
         return success
 
     def transport_object(self):
-        # Move towards the bin to deposit the object
-        print("Transporting object to bin...")
-        # Actual transport code here
-        pass
+        self.path_planning_goal = (self.bin_location[0], self.bin_location[1], None)
 
     def deposit_object(self):
         # Deposit the object into the bin
@@ -254,3 +265,7 @@ class TidySpotPlanner(LeafSystem):
         print(f"Exploring environment, new exploration goal: {new_goal}")
 
         self.path_planning_goal = (new_goal[0], new_goal[1], None)
+
+    def set_new_exploration_goal(self, goal):
+        print("Setting new exploration goal:", goal)
+        self.path_planning_goal = goal

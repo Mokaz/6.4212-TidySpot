@@ -15,22 +15,23 @@ from typing import List, Tuple, Dict
 from scipy.ndimage import label
 
 ADD_DETECTIONS_TO_GRIDMAP = True
-VISUALIZE_GRID_MAP = False
+VISUALIZE_GRID_MAP = True
 
 class PointCloudMapper(LeafSystem):
-    def __init__(self, station: Diagram, camera_names: List[str], point_clouds, resolution, robot_radius, height_threshold=0.1):
+    def __init__(self, station: Diagram, camera_names: List[str], point_clouds, resolution, robot_radius, height_threshold=0.1, meshcat=None):
         LeafSystem.__init__(self)
         self._point_clouds = point_clouds
         self._camera_names = camera_names
         self._cameras = {
             point_cloud_name: station.GetSubsystemByName(f"rgbd_sensor_{point_cloud_name}") for point_cloud_name in camera_names
         }
+        self.meshcat = meshcat
         
         # Input ports
         self._point_cloud_inputs = {
             point_cloud_name: self.DeclareAbstractInputPort(f"{point_cloud_name}.point_cloud", AbstractValue.Make(PointCloud())) for point_cloud_name in camera_names
         }
-        self._object_point_cloud = self.DeclareAbstractInputPort(f"cropped_point_cloud", AbstractValue.Make(PointCloud()))
+        self._object_pcd_input = self.DeclareAbstractInputPort(f"cropped_point_cloud", AbstractValue.Make(PointCloud()))
 
         # Output ports
         self.DeclareAbstractOutputPort("grid_map", lambda: AbstractValue.Make(np.full((100, 100), -1)), self.CalcGridMap)
@@ -59,8 +60,13 @@ class PointCloudMapper(LeafSystem):
 
         if ADD_DETECTIONS_TO_GRIDMAP:
             # Process object point cloud to mark objects
-            object_point_cloud = self._object_point_cloud.Eval(context).xyzs()
-            valid_object_points = object_point_cloud[:, np.isfinite(object_point_cloud).all(axis=0)]  # Filter points that are finite
+            object_pcd = self._object_pcd_input.Eval(context)
+
+            # self.meshcat.SetObject("object_point_cloud", object_pcd)
+
+            object_point_cloud_points = object_pcd.xyzs()
+            valid_object_points = object_point_cloud_points[:, np.isfinite(object_point_cloud_points).all(axis=0)]  # Filter points that are finite
+
             ox, oy, _, _ = self.pointcloud_to_grid(valid_object_points)  # Convert to grid (objects only)
             self.grid_map = self.update_grid_map(self.grid_map, ox, oy, [], [], value=2)  # Mark objects with value 2
 
@@ -68,6 +74,8 @@ class PointCloudMapper(LeafSystem):
         if VISUALIZE_GRID_MAP:
             self.visualize_grid_map()  # Visualize the grid map
         self.cluster_objects()  # Cluster objects in the grid map
+        # print(f"Object clusters: {self.object_clusters}")
+
         output.set_value(self.grid_map)
 
     def connect_point_clouds(self, point_cloud_cropper, station: Diagram, builder: DiagramBuilder):
@@ -80,7 +88,7 @@ class PointCloudMapper(LeafSystem):
             builder.Connect(point_cloud_output, point_cloud_input)
             # builder.Connect(label_image_output, label_image_input)
 
-        builder.Connect(point_cloud_cropper.GetOutputPort("cropped_point_cloud"), self._object_point_cloud)
+        builder.Connect(point_cloud_cropper.GetOutputPort("cropped_point_cloud"), self._object_pcd_input)
 
     def pointcloud_to_grid(self, point_cloud: np.ndarray) -> Tuple[List[int], List[int], List[int], List[int]]:
         """

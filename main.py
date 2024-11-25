@@ -94,7 +94,7 @@ try:
     #### GRASPING ####
 
     # Instantiate PointCloudCropper
-    point_cloud_cropper = builder.AddSystem(PointCloudCropper(camera_names))
+    point_cloud_cropper = builder.AddSystem(PointCloudCropper(camera_names, meshcat=meshcat))
     point_cloud_cropper.set_name("point_cloud_cropper")
     point_cloud_cropper.connect_ports(to_point_cloud, object_detector, builder)
 
@@ -111,7 +111,7 @@ try:
     ### PLANNER ###
 
     # Add point cloud mapper for path planner
-    point_cloud_mapper = builder.AddSystem(PointCloudMapper(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.6))
+    point_cloud_mapper = builder.AddSystem(PointCloudMapper(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.6, meshcat=meshcat))
     point_cloud_mapper.set_name("point_cloud_mapper")
     point_cloud_mapper.connect_point_clouds(point_cloud_cropper, station, builder)
 
