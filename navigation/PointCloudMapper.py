@@ -127,8 +127,7 @@ class PointCloudMapper(LeafSystem):
         """
         for x, y in zip(ox, oy):
             if 0 <= x < grid_map.shape[0] and 0 <= y < grid_map.shape[1]:
-                if grid_map[x,y] != 2: # only allow the cell to be changed if its not an object
-                    grid_map[x, y] = value  # Mark cell as occupied (obstacle or object)
+                grid_map[x, y] = value  # Mark cell as occupied (obstacle or object)
 
         for x, y in zip(free_ox, free_oy):
             if 0 <= x < grid_map.shape[0] and 0 <= y < grid_map.shape[1]:
