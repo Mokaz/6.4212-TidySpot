@@ -121,7 +121,7 @@ class Navigator(LeafSystem):
                 self.goal = self.EvalVectorInput(context, self._goal_input_index).get_value().copy()
                 # print("Received New goal: ({:.3f}, {:.3f}, {:.3f})".format(*self.goal))
 
-                if self.meshcat:
+                if self.visualize and self.meshcat:
                     add_sphere_to_meshcat_xy_plane(self.meshcat, "goal_original", self.goal, radius=0.05, rgba=[0, 0, 1, 1])
 
                 if navigator_state == NavigationState.MOVE_NEAR_OBJECT.value:
@@ -257,7 +257,7 @@ class Navigator(LeafSystem):
                 self.waypoints = None
                 self.current_waypoint_idx = 0
 
-        if self.meshcat:
+        if self.visualize and self.meshcat:
             add_sphere_to_meshcat_xy_plane(self.meshcat, "desired_position", desired_position[:2], radius=0.05, rgba=[1, 1, 0, 1])
 
         # print("Desired position: ({:.3f}, {:.3f}, {:.3f})".format(*desired_position))
