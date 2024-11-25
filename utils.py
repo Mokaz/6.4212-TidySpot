@@ -24,6 +24,9 @@ from pydrake.all import (
     Meshcat,
     MeshcatPointCloudVisualizer,
     OutputPort,
+    Rgba,
+    Sphere,
+    RigidTransform,
 )
 
 from manipulation.systems import ExtractPose
@@ -47,7 +50,7 @@ def export_diagram_as_svg(diagram: Diagram, file: Union[BinaryIO, str]) -> None:
         diagram.GetGraphvizString())[0].create_svg()
     file.write(svg_data)
 
-# CUDA memory management
+### CUDA memory management ###
 def cleanup_resources():
     print('Cleaning up resources...')
     # Clear CUDA cache
@@ -69,6 +72,43 @@ def register_signal_handlers():
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
     signal.signal(signal.SIGTSTP, signal_handler)
+
+### Meshcat ###
+def add_sphere_to_meshcat_xy_plane(meshcat, name, position, radius=0.05, rgba=[1, 0, 0, 1]):
+    meshcat.SetObject(
+        name,
+        Sphere(radius=radius),
+        Rgba(*rgba)
+    )
+    meshcat.SetTransform(
+        name,
+        RigidTransform([position[0], position[1], 0])
+    )
+
+### Drake ###
+import numpy as np
+
+def get_bin_translation(scenario, bin_link_name):
+    """
+    Extracts the translation of planar_bin::bin_base from the scenario directives.
+    
+    Parameters:
+        scenario (object): The scenario object containing directives.
+    
+    Returns:
+        numpy.ndarray: Translation array of the bin if found, otherwise [0, 0, 0].
+    """
+    bin_weld_directive = next(
+        (directive for directive in scenario.directives if
+         directive.add_weld and directive.add_weld.child == bin_link_name),
+        None
+    )
+    
+    if bin_weld_directive:
+        return bin_weld_directive.add_weld.X_PC.translation
+    else:
+        print("Weld directive for planar_bin::bin_base not found. Setting to default bin location: [0, 0, 0]")
+        return np.array([0, 0, 0])
 
 def AddPointClouds(
     *,

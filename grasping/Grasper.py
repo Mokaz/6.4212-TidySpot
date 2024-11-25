@@ -51,7 +51,7 @@ class Grasper(LeafSystem):
 
     def connect_ports(self, grasp_selector, builder):
         # builder.Connect( 
-        #     self.get_output_port(0), # Get output port "request_grasp" from TidySpotPlanner
+        #     self.get_output_port(0), # Get output port "request_grasp" from TidySpotFSM
         #     grasp_selector.GetInputPort("do_grasp")
         # )
         builder.Connect(

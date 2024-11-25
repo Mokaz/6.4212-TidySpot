@@ -33,26 +33,15 @@ from pydrake.all import (
 )
 from enum import Enum, auto
 
-from navigation.PointCloudMapper import PointCloudMapper
+from utils import add_sphere_to_meshcat_xy_plane
 
-def add_sphere_to_meshcat_xy_plane(meshcat, name, position, radius=0.05, rgba=[1, 0, 0, 1]):
-    meshcat.SetObject(
-        name,
-        Sphere(radius=radius),
-        Rgba(*rgba)
-    )
-    meshcat.SetTransform(
-        name,
-        RigidTransform([position[0], position[1], 0])
-    )
+class NavigationState(Enum):
+    STOP = 0
+    GOTO_EXACT_LOCATION = auto()
+    MOVE_NEAR_OBJECT = auto()
 
-class NavigationGoalType(Enum):
-    EXPLORE = auto()
-    APPROACH_OBJECT = auto()
-    DEPOSIT_OBJECT = auto()
-
-class DynamicPathPlanner(LeafSystem):
-    def __init__(self, station, builder, initial_position, resolution, robot_radius, time_step=0.1, meshcat=None):
+class Navigator(LeafSystem):
+    def __init__(self, station, builder, initial_position, resolution, robot_radius, time_step=0.1, meshcat=None, visualize=False):
         """
         Initialize grid map for A* planning and smooth trajectory generation.
 
@@ -68,30 +57,25 @@ class DynamicPathPlanner(LeafSystem):
         self.robot_radius = robot_radius
         self.time_step = time_step  # Store the configurable time step
         self.meshcat = meshcat
+        self.visualize = visualize
         self.grid_size = (100, 100)  # Default grid size
 
         # State storage
         self._current_position = self.DeclareDiscreteState(3)  # x, y, theta
         self._trajectory_flag = self.DeclareDiscreteState(1)  # Boolean flag for trajectory update
-        self._done_astar = self.DeclareDiscreteState(1)  # Boolean flag for trajectory update
-        self._desired_state = self.DeclareDiscreteState(10)  # Vector of size 20
-        self._previous_execute_path = self.DeclareDiscreteState([0])  # Flag to ensure self.goal is set only once per mission. Initialize with 0 (False)
-        self.DeclareStateOutputPort("done_astar", self._done_astar)
+        self._navigation_complete = self.DeclareDiscreteState(1)  # Boolean flag for trajectory update
+        self._spot_commanded_state = self.DeclareDiscreteState(10)  # Vector of size 20
+        self._previous_navigator_state = self.DeclareDiscreteState([0])  # Flag to ensure self.goal is set only once per mission. Initialize with 0 (False)
 
-        # Declare input ports
-        self._grid_map_input_index = self.DeclareAbstractInputPort(
-            "grid_map", AbstractValue.Make(np.zeros((100, 100)))
-        ).get_index()
+        # Input ports
+        self._grid_map_input_index = self.DeclareAbstractInputPort("grid_map", AbstractValue.Make(np.zeros((100, 100)))).get_index()
         self._goal_input_index = self.DeclareVectorInputPort("goal", 3).get_index()
-        self._robot_position_input_index = self.DeclareVectorInputPort("robot_position", 3).get_index()
-        self._execute_path_input_index = self.DeclareVectorInputPort("execute_path", 1).get_index()  # NavigationGoalType: 0, 1 or 2
+        self._current_position_input_index = self.DeclareVectorInputPort("current_position", 3).get_index()
+        self._navigator_state_input_index = self.DeclareVectorInputPort("navigator_state", 1).get_index() 
 
-        # Declare output port for desired state (position and velocity)
-        self.DeclareVectorOutputPort(
-            "desired_state",
-            10,
-            self.UpdateDesiredState
-        )
+        # Output ports
+        self.DeclareStateOutputPort("navigation_complete", self._navigation_complete)
+        self.DeclareVectorOutputPort("spot_commanded_state", 10, self.UpdateDesiredState)
 
         # Trajectory storage
         self.trajectory = None
@@ -100,12 +84,6 @@ class DynamicPathPlanner(LeafSystem):
         self.current_waypoint_idx = 0
         self.goal = None
 
-        # Visualization elements
-        if self.meshcat:
-            self.visualize_path = "planned_path"
-            self.visualize_position = "current_position"
-            self.visualize_desired_position = "desired_position"
-
         # Periodic update for trajectory generation
         self._state_update_event = self.DeclarePeriodicUnrestrictedUpdateEvent(self.time_step, 0.0, self.UpdateTrajectory)
 
@@ -113,34 +91,32 @@ class DynamicPathPlanner(LeafSystem):
         desired_position = np.array([0.0, 0.0, 0.0])
         self.desired_arm_state = [0.0, -3.1, 3.1, 0.0, 0.0, 0.0, 0.0] # default stowed arm state
         
-        self.desired_state = np.concatenate([desired_position, self.desired_arm_state])
-
+        self.spot_commanded_state = np.concatenate([desired_position, self.desired_arm_state])
 
     def connect_mapper(self, point_cloud_mapper, station: Diagram, builder: DiagramBuilder):
         builder.Connect(point_cloud_mapper.get_output_port(0), self.get_input_port(self._grid_map_input_index)) # Output grid_map from mapper to input grid_map of planner
 
     def UpdateDesiredState(self, context: Context, output):
-        output.SetFromVector(self.desired_state)
+        output.SetFromVector(self.spot_commanded_state)
 
     def UpdateTrajectory(self, context: Context, state):
         """Generate or update the trajectory based on the FSM flag and goal."""
-        execute_path = int(self.get_input_port(self._execute_path_input_index).Eval(context)[0])
-        current_position = self.EvalVectorInput(context, self._robot_position_input_index).get_value()
-        previous_execute_path = context.get_discrete_state(self._previous_execute_path).get_value()[0]
+        navigator_state = int(self.get_input_port(self._navigator_state_input_index).Eval(context)[0])
+        current_position = self.EvalVectorInput(context, self._current_position_input_index).get_value()
+        previous_navigator_state = context.get_discrete_state(self._previous_navigator_state).get_value()[0]
 
-        # Retrieve the done_astar flag
-        done_astar = context.get_discrete_state(self._done_astar).get_value()[0]
+        navigation_complete = context.get_discrete_state(self._navigation_complete).get_value()[0]
 
         if self.goal is not None:
-            # Use old goal as desired position with curent heading
+            # Default to use old goal as desired position with curent heading
             desired_position = (self.goal[0], self.goal[1], current_position[2])
         else:
             desired_position = current_position[:3]
 
-        if execute_path and not done_astar:
+        if navigator_state and not navigation_complete:
 
-            if not previous_execute_path:
-                # Set the goal when execute_path goes from 0 to non-zero
+            if not previous_navigator_state:
+                # Set the goal when navigator_state goes from 0 to non-zero
                 # print("RISING EDGE: Setting new goal")
                 self.goal = self.EvalVectorInput(context, self._goal_input_index).get_value().copy()
                 # print("Received New goal: ({:.3f}, {:.3f}, {:.3f})".format(*self.goal))
@@ -148,7 +124,7 @@ class DynamicPathPlanner(LeafSystem):
                 if self.meshcat:
                     add_sphere_to_meshcat_xy_plane(self.meshcat, "goal_original", self.goal, radius=0.05, rgba=[0, 0, 1, 1])
 
-                if execute_path == NavigationGoalType.APPROACH_OBJECT.value:
+                if navigator_state == NavigationState.MOVE_NEAR_OBJECT.value:
                     approach_distance = 1  # Distance to stop before the object (in meters)
                     direction_vector = self.goal[:2] - current_position[:2]
                     distance_to_goal = np.linalg.norm(direction_vector)
@@ -158,7 +134,7 @@ class DynamicPathPlanner(LeafSystem):
                         # print(f"Adjusted goal position for approach: {self.goal[:2]}")
                     else:
                         print("Already within approach distance of object. Ending approach.")
-                        state.get_mutable_discrete_state(self._done_astar).set_value([1])
+                        state.get_mutable_discrete_state(self._navigation_complete).set_value([1])
                         desired_position = current_position[:3]
 
             if self.waypoints is None:
@@ -226,36 +202,35 @@ class DynamicPathPlanner(LeafSystem):
 
                     # print(f"New waypoints set len {len(self.waypoints)}, first desired_position:", desired_position)
 
-                    # Visualize the path using meshcat
-                    if self.meshcat:
+                    # Visualize goal and path using meshcat
+                    if self.visualize and self.meshcat:
                         # Clear existing visualization
-                        self.meshcat.Delete(self.visualize_path)
-                        # Draw lines between waypoints
+                        self.meshcat.Delete("planned_path")
+                        # Draw green lines between waypoints
                         waypoint_points = np.vstack((selected_points.T, np.zeros(len(indices))))
                         self.meshcat.SetLine(
-                            self.visualize_path,
+                            "planned_path",
                             waypoint_points,
-                            rgba=Rgba(0, 1, 0, 1),  # Green for waypoints
+                            rgba=Rgba(0, 1, 0, 1),
                             line_width=4
                         )
 
-                        # Draw spheres at each waypoint
+                        # Draw red spheres at each waypoint
                         for i, point in enumerate(selected_points):
                             self.meshcat.SetObject(
-                                f"{self.visualize_path}/point_{i}",
+                                f"planned_path/point_{i}",
                                 Sphere(radius=0.01),
-                                Rgba(1, 0, 0, 1)  # Red spheres
+                                Rgba(1, 0, 0, 1) 
                             )
                             self.meshcat.SetTransform(
-                                f"{self.visualize_path}/point_{i}",
+                                f"planned_path/point_{i}",
                                 RigidTransform([point[0], point[1], 0])
                             )
                 else:
-                    state.get_mutable_discrete_state(self._done_astar).set_value([1])
+                    state.get_mutable_discrete_state(self._navigation_complete).set_value([1])
                     desired_position = current_position[:3]
 
             elif self.waypoints is not None:
-                # Get current waypoint
                 current_waypoint = self.waypoints[self.current_waypoint_idx]
 
                 # Check if we've reached the current waypoint
@@ -264,7 +239,7 @@ class DynamicPathPlanner(LeafSystem):
                     self.current_waypoint_idx += 1
                     if self.current_waypoint_idx >= len(self.waypoints):
                         # print("Reached final waypoint, DONE ASTAR")
-                        state.get_mutable_discrete_state(self._done_astar).set_value([1])
+                        state.get_mutable_discrete_state(self._navigation_complete).set_value([1])
                         self.waypoints = None
                         self.current_waypoint_idx = 0
                     else:
@@ -277,27 +252,24 @@ class DynamicPathPlanner(LeafSystem):
         else:
             # Reset trajectory when not executing
             self.waypoints = None
-            if not execute_path:
-                # Reset the done_astar flag
-                state.get_mutable_discrete_state(self._done_astar).set_value([0])
-                # Reset waypoints
+            if not navigator_state:
+                state.get_mutable_discrete_state(self._navigation_complete).set_value([0])
                 self.waypoints = None
                 self.current_waypoint_idx = 0
 
         if self.meshcat:
-            add_sphere_to_meshcat_xy_plane(self.meshcat, self.visualize_desired_position, desired_position[:2], radius=0.05, rgba=[1, 1, 0, 1])
+            add_sphere_to_meshcat_xy_plane(self.meshcat, "desired_position", desired_position[:2], radius=0.05, rgba=[1, 1, 0, 1])
 
         # print("Desired position: ({:.3f}, {:.3f}, {:.3f})".format(*desired_position))
 
-        # Update the desired state with positions and default arm state
-        self.desired_state = np.concatenate([desired_position, self.desired_arm_state])
+        self.spot_commanded_state = np.concatenate([desired_position, self.desired_arm_state])
 
-        if np.any(np.isnan(self.desired_state)):
-            print("Warning: desired_state contains NaN values. Resetting to current position.")
-            self.desired_state = np.concatenate([current_position[:3], self.desired_arm_state])
+        if np.any(np.isnan(self.spot_commanded_state)):
+            print("Warning: spot_commanded_state contains NaN values. Resetting to current position.")
+            self.spot_commanded_state = np.concatenate([current_position[:3], self.desired_arm_state])
 
-        state.get_mutable_discrete_state(self._desired_state).SetFromVector(self.desired_state)
-        state.get_mutable_discrete_state(self._previous_execute_path).set_value([execute_path])
+        state.get_mutable_discrete_state(self._spot_commanded_state).SetFromVector(self.spot_commanded_state)
+        state.get_mutable_discrete_state(self._previous_navigator_state).set_value([navigator_state])
 
 
     def planning(self, start, goal, grid_map):

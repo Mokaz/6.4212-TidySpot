@@ -12,9 +12,9 @@ from manipulation.station import (
     MakeHardwareStation,
 )
 
-from tidy_spot_planner import TidySpotPlanner
+from TidySpotFSM import TidySpotFSM
 from navigation.PointCloudMapper import PointCloudMapper
-from navigation.DynamicPathPlanner import DynamicPathPlanner
+from navigation.Navigator import Navigator
 from controller.spot_controller import PositionCombiner
 
 from utils import *
@@ -73,6 +73,9 @@ try:
     # scenario = AppendDirectives(scenario, filename="objects/added_object_directives.yaml")
     scenario = AppendDirectives(scenario, filename="objects/simple_cracker_box_detection_test.yaml")
 
+    # Get bin location from scenario (assuming bin link is welded to world)
+    bin_location = get_bin_translation(scenario, bin_link_name="planar_bin::bin_base")
+
     station = builder.AddSystem(MakeHardwareStation(
         scenario=scenario,
         meshcat=meshcat,
@@ -116,14 +119,14 @@ try:
     point_cloud_mapper.connect_point_clouds(point_cloud_cropper, station, builder)
 
     # Add path planner and mapper
-    dynamic_path_planner = builder.AddSystem(DynamicPathPlanner(station, builder, np.array([0,0,0]), resolution=0.1, robot_radius=0.6, meshcat=meshcat))
-    dynamic_path_planner.set_name("dynamic_path_planner")
-    dynamic_path_planner.connect_mapper(point_cloud_mapper, station, builder)
+    navigator = builder.AddSystem(Navigator(station, builder, np.array([0,0,0]), resolution=0.1, robot_radius=0.6, meshcat=meshcat, visualize=True))
+    navigator.set_name("navigator")
+    navigator.connect_mapper(point_cloud_mapper, station, builder)
 
-    # Add Finite State Machine = TidySpotPlanner
-    tidy_spot_planner = builder.AddSystem(TidySpotPlanner(plant))
-    tidy_spot_planner.set_name("tidy_spot_planner")
-    tidy_spot_planner.connect_components(builder, grasper, point_cloud_mapper, dynamic_path_planner, station)
+    # Add Finite State Machine = TidySpotFSM
+    tidy_spot_planner = builder.AddSystem(TidySpotFSM(plant, bin_location))
+    tidy_spot_planner.set_name("tidy_spot_fsm")
+    tidy_spot_planner.connect_components(builder, grasper, point_cloud_mapper, navigator, station)
 
     # Last component, add state interpolator which converts desired state to desired state and velocity
     state_interpolator = builder.AddSystem(StateInterpolatorWithDiscreteDerivative(10, 0.1, suppress_initial_transient=True))
@@ -131,7 +134,7 @@ try:
 
     # Connect desired state through interpolator to robot
     builder.Connect(
-        dynamic_path_planner.GetOutputPort("desired_state"),
+        navigator.GetOutputPort("spot_commanded_state"),
         state_interpolator.get_input_port()
     )
     builder.Connect(
@@ -169,12 +172,12 @@ try:
     def PrintStates(context):
         # Get subsystem contexts
         station_context = station.GetMyContextFromRoot(context)
-        path_planner_context = dynamic_path_planner.GetMyContextFromRoot(context)
+        path_planner_context = navigator.GetMyContextFromRoot(context)
 
         # Evaluate ports with correct contexts
         desired_state = station.GetInputPort("spot.desired_state").Eval(station_context)
         actual_state = station.GetOutputPort("spot.state_estimated").Eval(station_context)
-        path_planner_state = dynamic_path_planner.GetOutputPort("desired_state").Eval(path_planner_context)
+        path_planner_state = navigator.GetOutputPort("desired_state").Eval(path_planner_context)
 
         print(f"\nTime: {context.get_time():.2f}")
         print(f"Desired state (to robot): {desired_state}")  # Just print base position for clarity
@@ -182,8 +185,8 @@ try:
         print(f"Actual state: {actual_state}")
 
         # Also print path planner status
-        execute_path = dynamic_path_planner.get_input_port(dynamic_path_planner._execute_path_input_index).Eval(path_planner_context)
-        goal = dynamic_path_planner.get_input_port(dynamic_path_planner._goal_input_index).Eval(path_planner_context)
+        execute_path = navigator.get_input_port(navigator._execute_path_input_index).Eval(path_planner_context)
+        goal = navigator.get_input_port(navigator._goal_input_index).Eval(path_planner_context)
         print(f"Execute path: {bool(execute_path[0])}")
         print(f"Goal: {goal[:3]}")
         print("---")
