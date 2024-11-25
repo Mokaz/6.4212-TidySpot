@@ -3,6 +3,10 @@ anygrasp_sdk
 diagram.svg
 Grounded-Segment-Anything
 
+# GroundedSAM imgs and Drake diagram
+*.jpg
+*.svg
+
 # Compiled source #
 ###################
 *.com
