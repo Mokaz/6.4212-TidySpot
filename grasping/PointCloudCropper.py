@@ -1,7 +1,8 @@
 import os
 import logging
 import numpy as np
-from types import SimpleNamespace
+from sklearn.cluster import DBSCAN
+
 from pydrake.all import (
     AbstractValue,
     RigidTransform,
@@ -15,6 +16,8 @@ from pydrake.all import (
 )
 import open3d as o3d
 from typing import List, Tuple, Mapping
+
+DO_DBSCAN_CLUSTERING = True
 
 class PointCloudCropper(LeafSystem):
     def __init__(self, camera_names: List[str], meshcat=None):
@@ -71,10 +74,32 @@ class PointCloudCropper(LeafSystem):
         segmented_points = segmented_points[valid_mask]
         segmented_colors = segmented_colors[valid_mask]
 
+        if DO_DBSCAN_CLUSTERING:
+            self.visualize_pcd(segmented_points, segmented_colors)
+            # Assuming 'segmented_point_cloud' is a NumPy array of shape (N, 3)
+            clustering = DBSCAN(eps=0.05, min_samples=10).fit(segmented_points)
+            labels = clustering.labels_
+
+            # Filter out noise points (labels == -1)
+            non_noise = labels != -1
+            filtered_points = segmented_points[non_noise]
+            filtered_colors = segmented_colors[non_noise]
+
+            # Select the largest cluster
+            unique_labels, counts = np.unique(labels[non_noise], return_counts=True)
+            largest_cluster = unique_labels[np.argmax(counts)]
+            final_points = segmented_points[labels == largest_cluster]
+            final_colors = segmented_colors[labels == largest_cluster]
+
+            self.visualize_pcd(final_points, final_colors)
+        else:
+            final_points = segmented_points
+            final_colors = segmented_colors
+
         fields = Fields(BaseField.kXYZs | BaseField.kRGBs)
-        segmented_point_cloud = PointCloud(segmented_points.shape[0], fields)
-        segmented_point_cloud.mutable_xyzs()[:] = segmented_points.T
-        segmented_point_cloud.mutable_rgbs()[:] = (segmented_colors.T * 255.0).astype(np.uint8)
+        segmented_point_cloud = PointCloud(final_points.shape[0], fields)
+        segmented_point_cloud.mutable_xyzs()[:] = final_points.T
+        segmented_point_cloud.mutable_rgbs()[:] = (final_colors.T * 255.0).astype(np.uint8)
 
         output.set_value(segmented_point_cloud)
         # print("PointCloudCropper: CropPointCloudBySegmentation, sending to PointCloudMapper")
