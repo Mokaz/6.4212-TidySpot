@@ -144,7 +144,7 @@ class TidySpotPlanner(LeafSystem):
                 print("ASTAR DONE RECEIVED: Exploration completed to area.")
                 
                 if self.check_detections():
-                    grid_points, centroid = self.object_clusters.items()[0].items() # TODO: Make this a function that chooses the best object to approach
+                    grid_points, centroid = self.object_clusters[1].values() # if object_clusters exists, there will always be one with key value 1
                     print(f"Found object 0 at {centroid['world']}")
 
                     self.current_object_location = centroid["world"]

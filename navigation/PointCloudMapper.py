@@ -39,7 +39,6 @@ class PointCloudMapper(LeafSystem):
         self.resolution = resolution
         self.robot_radius = robot_radius
         self.grid_map = np.full((100, 100), -1)  # Initialized with a fixed size grid map with unexplored (-1)
-        self.area_graph = {}  # Initialize an empty graph to maintain new area information
         self.height_threshold = height_threshold  # Threshold to differentiate between free space and obstacles
         self.object_clusters = {}  # Dictionary to hold obstacle clusters
 
@@ -57,7 +56,6 @@ class PointCloudMapper(LeafSystem):
             valid_points = point_cloud[:, np.isfinite(point_cloud).all(axis=0)]  # Filter points that are finite
             ox, oy, free_ox, free_oy = self.pointcloud_to_grid(valid_points)  # Convert to grid
             self.grid_map = self.update_grid_map(self.grid_map, ox, oy, free_ox, free_oy, value=1)  # Mark obstacles with value 1
-            self.update_area_graph(ox, oy)  # Update the area graph with new obstacles
 
         if ADD_DETECTIONS_TO_GRIDMAP:
             # Process object point cloud to mark objects
@@ -67,7 +65,6 @@ class PointCloudMapper(LeafSystem):
             self.grid_map = self.update_grid_map(self.grid_map, ox, oy, [], [], value=2)  # Mark objects with value 2
 
         self.mark_robot_footprint_as_free()
-        self.update_grid_map_from_area_graph()  # Update grid_map using area graph
         if VISUALIZE_GRID_MAP:
             self.visualize_grid_map()  # Visualize the grid map
         self.cluster_objects()  # Cluster objects in the grid map
@@ -130,33 +127,14 @@ class PointCloudMapper(LeafSystem):
         """
         for x, y in zip(ox, oy):
             if 0 <= x < grid_map.shape[0] and 0 <= y < grid_map.shape[1]:
-                grid_map[x, y] = value  # Mark cell as occupied (obstacle or object)
+                if grid_map[x,y] != 2: # only allow the cell to be changed if its not an object
+                    grid_map[x, y] = value  # Mark cell as occupied (obstacle or object)
 
         for x, y in zip(free_ox, free_oy):
             if 0 <= x < grid_map.shape[0] and 0 <= y < grid_map.shape[1]:
                 # Mark as free even if it was previously marked as an obstacle, to reflect dynamic changes
                 grid_map[x, y] = 0  # Mark cell as free space
         return grid_map
-
-    def update_area_graph(self, ox: List[int], oy: List[int]):
-        """
-        Updates the area graph with new obstacles.
-
-        ox, oy: Lists of grid coordinates representing obstacles
-        """
-        for x, y in zip(ox, oy):
-            if (x, y) not in self.area_graph:
-                self.area_graph[(x, y)] = 1  # Add new obstacle node
-            else:
-                self.area_graph[(x, y)] += 1  # Increment obstacle count for existing node
-
-    def update_grid_map_from_area_graph(self):
-        """
-        Updates the grid map using the information stored in the area graph.
-        """
-        for (x, y), count in self.area_graph.items():
-            if 0 <= x < self.grid_map.shape[0] and 0 <= y < self.grid_map.shape[1]:
-                self.grid_map[x, y] = 1  # Mark cell as occupied based on area graph information
 
     def mark_robot_footprint_as_free(self):
         """
@@ -185,7 +163,12 @@ class PointCloudMapper(LeafSystem):
         for i in range(1, num_features + 1):
             cluster_indices = np.argwhere(labeled_grid == i)
             grid_points = cluster_indices.tolist()
-
+            
+            # TODO: Add this in if we are getting incorrect pointclouds
+            # if len(grid_points) < 2: 
+            #     # not enough points to register as an object?
+            #     continue
+            
             # Calculate a good centroid that is part of the cluster
             centroid_index = len(cluster_indices) // 2  # Take the middle point in the sorted list as a centroid
             centroid_grid = cluster_indices[centroid_index]
