@@ -12,7 +12,6 @@ from pydrake.all import (
     RotationMatrix
 )
 from grasping.grasp_utils import add_anygrasp_to_path
-import open3d as o3d
 from typing import List, Tuple, Mapping
 
 class GraspSelector(LeafSystem):
@@ -22,6 +21,7 @@ class GraspSelector(LeafSystem):
         self.grasp_handler = None
 
         if use_anygrasp:
+            import open3d as o3d
             from grasping.AnyGraspHandler import AnyGraspHandler
             self.grasp_handler = AnyGraspHandler(anygrasp_path)
         else:
@@ -64,6 +64,7 @@ class GraspSelector(LeafSystem):
             output.set_value(RigidTransform(RotationMatrix(g_best.rotation_matrix), g_best.translation))
 
     def test_anygrasp_frontleft_segmented_pcd(self, grasp_selector_context: Context):
+        import open3d as o3d
         frontleft_pcd = self._point_cloud_input.Eval(grasp_selector_context)
         points = frontleft_pcd.xyzs().T.astype(np.float32)         # Shape: (N, 3)
         colors = frontleft_pcd.rgbs().T.astype(np.float32) / 255.0
@@ -196,6 +197,7 @@ class GraspSelector(LeafSystem):
         self.grasp_handler.run_grasp(points, colors, visualize=True)
 
     def visualize_pcd_with_grasps(self, points, colors=None, gg=None):
+        import open3d as o3d
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points)
 
