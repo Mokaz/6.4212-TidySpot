@@ -75,7 +75,7 @@ class PointCloudCropper(LeafSystem):
         segmented_colors = segmented_colors[valid_mask]
 
         if DO_DBSCAN_CLUSTERING:
-            self.visualize_pcd(segmented_points, segmented_colors)
+            # self.visualize_pcd(segmented_points, segmented_colors)
             # Assuming 'segmented_point_cloud' is a NumPy array of shape (N, 3)
             clustering = DBSCAN(eps=0.05, min_samples=10).fit(segmented_points)
             labels = clustering.labels_
@@ -91,7 +91,7 @@ class PointCloudCropper(LeafSystem):
             final_points = segmented_points[labels == largest_cluster]
             final_colors = segmented_colors[labels == largest_cluster]
 
-            self.visualize_pcd(final_points, final_colors)
+            # self.visualize_pcd(final_points, final_colors)
         else:
             final_points = segmented_points
             final_colors = segmented_colors
