@@ -16,7 +16,6 @@ import matplotlib.pyplot as plt
 import torchvision
 torchvision.disable_beta_transforms_warning()
 
-from perception.GroundedSAM import GroundedSAM
 
 import os
 import cv2
@@ -29,7 +28,12 @@ class ObjectDetector(LeafSystem):
         LeafSystem.__init__(self)
 
         if use_groundedsam:
-            self.grounded_sam = GroundedSAM(groundedsam_path, device=device)
+            from perception.GroundedSAM import GroundedSAM
+            self.perceptor = GroundedSAM(groundedsam_path, device=device)
+        else:
+            # if we aren't using GroundedSAM, then we're using groundtruth
+            from perception.GroundTruthSensor import GroundTruthSensor
+            self.perceptor = GroundTruthSensor()
 
         self._camera_names = camera_names
 
@@ -70,15 +74,15 @@ class ObjectDetector(LeafSystem):
     def Update(self, context, state):
         for camera_name in self._camera_names:
             rgb_image = cv2.cvtColor(self.get_color_image(camera_name, context).data, cv2.COLOR_RGBA2RGB)
-            mask, confidence = self.grounded_sam.detect_and_segment_objects(rgb_image, camera_name)
+            mask, confidence = self.perceptor.detect_and_segment_objects(rgb_image, camera_name)
 
     def SegmentFrontCameras(self, context: Context, output):
         # print("ObjectDetector: SegmentFrontCameras")
         frontleft_rgb_image = cv2.cvtColor(self.get_color_image("frontleft", context).data, cv2.COLOR_RGBA2RGB)
         frontright_rgb_image = cv2.cvtColor(self.get_color_image("frontright", context).data, cv2.COLOR_RGBA2RGB)
 
-        front_left_mask, front_left_confidence = self.grounded_sam.detect_and_segment_objects(frontleft_rgb_image, "frontleft")
-        front_right_mask, front_right_confidence = self.grounded_sam.detect_and_segment_objects(frontright_rgb_image, "frontright")
+        front_left_mask, front_left_confidence = self.perceptor.detect_and_segment_objects(frontleft_rgb_image, "frontleft")
+        front_right_mask, front_right_confidence = self.perceptor.detect_and_segment_objects(frontright_rgb_image, "frontright")
 
         masks_confidences = [
             (front_left_mask, front_left_confidence, "frontleft"),
@@ -105,7 +109,7 @@ class ObjectDetector(LeafSystem):
 
     def test_segmentation(self, object_detector_context: Context, camera_name):
         rgb_image = cv2.cvtColor(self.get_color_image(camera_name, object_detector_context).data, cv2.COLOR_RGBA2RGB)
-        mask, confidence = self.grounded_sam.detect_and_segment_objects(rgb_image, camera_name)
+        mask, confidence = self.perceptor.detect_and_segment_objects(rgb_image, camera_name)
         if mask is None:
             print(camera_name, " segmentation failed, no object detections found")
         else:

@@ -36,7 +36,7 @@ class AnyGraspHandler:
             logging.error(f"Failed to initialize AnyGrasp: {e}")
             raise e
 
-    def run_anygrasp(self, points, colors, lims=None, flip_before_calc=True, visualize=False):
+    def run_grasp(self, points, colors, lims=None, flip_before_calc=True, visualize=False):
         """
         Runs the AnyGrasp grasp detection on the provided point cloud.
 

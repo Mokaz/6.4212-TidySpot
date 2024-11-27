@@ -12,7 +12,6 @@ from pydrake.all import (
     RotationMatrix
 )
 from grasping.grasp_utils import add_anygrasp_to_path
-from grasping.AnyGraspHandler import AnyGraspHandler
 import open3d as o3d
 from typing import List, Tuple, Mapping
 
@@ -20,10 +19,16 @@ class GraspSelector(LeafSystem):
     def __init__(self, use_anygrasp: bool, anygrasp_path: str = os.path.join(os.getcwd(), "third_party/anygrasp_sdk")):
         LeafSystem.__init__(self)
         self._use_anygrasp = use_anygrasp
-        self.anygrasp_handler = None
+        self.grasp_handler = None
 
         if use_anygrasp:
-            self.anygrasp_handler = AnyGraspHandler(anygrasp_path)
+            from grasping.AnyGraspHandler import AnyGraspHandler
+            self.grasp_handler = AnyGraspHandler(anygrasp_path)
+        else:
+            # If not using anygrasp, then we are using antipodal
+            from grasping.AntipodalGraspHandler import AntipodalGraspHandler
+            self.grasp_handler = AntipodalGraspHandler() # TODO, change anygrasp_handler to just grasp handler to abstract it
+
 
         # Input ports
         self._point_cloud_input = self.DeclareAbstractInputPort("point_cloud_input", AbstractValue.Make(PointCloud(0)))
@@ -54,7 +59,7 @@ class GraspSelector(LeafSystem):
         # self.visualize_pcd_with_grasps(points, colors)
         
         if self._use_anygrasp:
-            gg_ten_best = self.anygrasp_handler.run_anygrasp(points, colors, lims=None, visualize=False) # TODO: Implement more filtering
+            gg_ten_best = self.grasp_handler.run_grasp(points, colors, lims=None, visualize=False) # TODO: Implement more filtering
             g_best = gg_ten_best[0]
             output.set_value(RigidTransform(RotationMatrix(g_best.rotation_matrix), g_best.translation))
 
@@ -137,7 +142,7 @@ class GraspSelector(LeafSystem):
 
         lims = [xmin, xmax, ymin, ymax, zmin, zmax]
 
-        self.anygrasp_handler.run_anygrasp(points, colors, lims, flip_before_calc=True, visualize=True)
+        self.grasp_handler.run_grasp(points, colors, lims, flip_before_calc=True, visualize=True)
 
     def test_anygrasp_frontleft_pcd(self, to_point_cloud: Mapping[str, DepthImageToPointCloud], simulator_context: Context):
         frontleft_pcd = to_point_cloud["frontleft"].get_output_port().Eval(
@@ -188,7 +193,7 @@ class GraspSelector(LeafSystem):
 
         # self.visualize_pcd_with_grasps(points, colors)
 
-        self.anygrasp_handler.run_anygrasp(points, colors, visualize=True)
+        self.grasp_handler.run_grasp(points, colors, visualize=True)
 
     def visualize_pcd_with_grasps(self, points, colors=None, gg=None):
         pcd = o3d.geometry.PointCloud()

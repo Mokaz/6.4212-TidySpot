@@ -41,6 +41,11 @@ In the Drake simulation, the objects will be of unknown types, and the room may 
 3. Clone the AnyGrasp repository and follow install instructions
 4. Get license and download checkpoints
 
+### Running the code
+Example usage of the TidySpot project with SAM as perception module and antipodal grasp detection
+```
+python main.py --grasp_type antipodal --perception_type sam --scenario objects/simple_cracker_box_detection_test.yaml --device cpu
+```
 ### Folder structure
     .
     ├── anygrasp_sdk
