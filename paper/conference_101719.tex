@@ -1,5 +1,5 @@
 \documentclass[conference]{IEEEtran}
-\IEEEoverridecommandlockouts
+%\IEEEoverridecommandlockouts
 % The preceding line is only needed to identify funding in the first footnote. If that is unneeded, please comment it out.
 \usepackage{cite}
 \usepackage{amsmath,amssymb,amsfonts}
@@ -9,13 +9,14 @@
 \usepackage{xcolor}
 \def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
     T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+    
+\usepackage{acronym}
+\acrodef{YAML}{YAML Ain’t Markup Language}
+
 \begin{document}
 
-\title{TidySpot*\\
-{\footnotesize \textsuperscript{*}Note: Sub-titles are not captured in Xplore and
-should not be used}
-\thanks{Identify applicable funding agency here. If none, delete this.}
-}
+
+\title{TidySpot: Using Spot to tidy up any room*}
 
 \author{\IEEEauthorblockN{Martin Huynh}
 \IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
@@ -27,7 +28,7 @@ email address or ORCID}
 \IEEEauthorblockA{\textit{dept. name of organization (of Aff.)} \\
 \textit{name of organization (of Aff.)}\\
 Cambridge, MA \\
-email address or ORCID}
+trangml@mit.edu}
 \and
 \IEEEauthorblockN{Robin ballweg}
 \IEEEauthorblockA{\textit{Dept. of Mechanical Engineering } \\
@@ -40,8 +41,7 @@ robin.ballweg@edu.rptu.de}
 
 \begin{abstract}
 This document is a model and instructions for \LaTeX.
-This and the IEEEtran.cls file define the components of your paper [title, text, heads, etc.]. *CRITICAL: Do Not Use Symbols, Special Characters, Footnotes, 
-or Math in Paper Title or Abstract.
+This and the IEEEtran.cls file define the components of your paper [title, text, heads, etc.]. *CRITICAL: Do Not Use Symbols, Special Characters, Footnotes, or Math in Paper Title or Abstract.
 \end{abstract}
 
 \begin{IEEEkeywords}
@@ -49,8 +49,55 @@ component, formatting, style, styling, insert
 \end{IEEEkeywords}
 
 \section{Introduction}
-This document is a model and instructions for \LaTeX.
-Please observe the conference page limits. 
+Robotics has demonstrated immense potential in performing household tasks. 
+Advances in mobile manipulation have enabled robots to handle a wide variety of tasks in home environments, and may in time simplify everyday living. 
+This project aims to explore whether Spot from Boston Dynamics can effectively identify and clear clutter in a room with an arbitrary layout. 
+This work aims to successfully simulate Spot using its arm and onboard sensors to detect, grasp, and transport objects from randomly placed positions in a room into a large bin, using the open-soruce Drake Simulator. 
+In our simulation, the objects will be of unknown types, and the room may contain multiple obstacles. 
+We mainly focus our contribution on combining high-level state-of-the-art tools specifically made as solutions to partial problems, which combined help to solve the complex task tackled in this work.
+
+\section{Related Work}
+
+\subsection{Related Work on Navigation}
+A*
+
+\subsection{Related Work on Object Localization and Segmentation}
+GroundedSAM \cite{grouned-sam}
+
+\subsection{Related Work on Grasp Selection}
+AnyGrasp \cite{anygrasp}
+
+\section{Methodology}
+
+\section{Results}
+
+\subsection{Testing Procedure}
+
+\subsection{Quantitative Results}
+
+\subsection{Discussion of Limitations}
+
+\section{Conclusion}
+
+\section*{Acknowledgment}
+
+We thank Professor Tomas Lozano-Perez and his technical staff, especially Ethan Yang, for their support, as well as their very helpful and informative lectures and office hours this semester.
+
+\section{Contributions}
+
+Martin H. created the rough simulation structure and implemented GroundedSAM, AnyGrasp and the connected perception.
+Matthew T. developed the Finite-State-Machine as well as the navigation.
+Robin B. created multiple scene files including custom objects and implemented the basic robot controller.
+All members contributed to the creation of project proposals and the communication of results.
+
+\begin{thebibliography}{01}
+\bibitem{anygrasp} H. -S. Fang et al., "AnyGrasp: Robust and Efficient Grasp Perception in Spatial and Temporal Domains," in IEEE Transactions on Robotics, vol. 39, no. 5, pp. 3929-3945, Oct. 2023.
+\bibitem{grounded-sam} T. Ren et al., “Grounded SAM: Assembling Open-World Models for Diverse Visual Tasks,” arXiv.org, 2024.
+\end{thebibliography}
+
+
+% From here it's guidance on how to use the template!
+% Do not hesitate to read it, it will later be deleted
 
 \section{Ease of Use}
 
@@ -79,6 +126,8 @@ Define abbreviations and acronyms the first time they are used in the text,
 even after they have been defined in the abstract. Abbreviations such as 
 IEEE, SI, MKS, CGS, ac, dc, and rms do not have to be defined. Do not use 
 abbreviations in the title or heads unless they are unavoidable.
+Use \ac{YAML} to abbreviate words, after defining it by using acrodef\{\}\{\} to define the word.
+The acronym package will take care, that only the first use of \ac{YAML} defines the acronym.
 
 \subsection{Units}
 \begin{itemize}
@@ -226,13 +275,6 @@ with units. In the example, write ``Magnetization (A/m)'' or ``Magnetization
 quantities and units. For example, write ``Temperature (K)'', not 
 ``Temperature/K''.
 
-\section*{Acknowledgment}
-
-The preferred spelling of the word ``acknowledgment'' in America is without 
-an ``e'' after the ``g''. Avoid the stilted expression ``one of us (R. B. 
-G.) thanks $\ldots$''. Instead, try ``R. B. G. thanks$\ldots$''. Put sponsor 
-acknowledgments in the unnumbered footnote on the first page.
-
 \section*{References}
 
 Please number citations consecutively within brackets \cite{b1}. The 
@@ -254,7 +296,7 @@ element symbols.
 For papers published in translation journals, please give the English 
 citation first, followed by the original foreign-language citation \cite{b6}.
 
-\begin{thebibliography}{00}
+\begin{thebibliography}{01}
 \bibitem{b1} G. Eason, B. Noble, and I. N. Sneddon, ``On certain integrals of Lipschitz-Hankel type involving products of Bessel functions,'' Phil. Trans. Roy. Soc. London, vol. A247, pp. 529--551, April 1955.
 \bibitem{b2} J. Clerk Maxwell, A Treatise on Electricity and Magnetism, 3rd ed., vol. 2. Oxford: Clarendon, 1892, pp.68--73.
 \bibitem{b3} I. S. Jacobs and C. P. Bean, ``Fine particles, thin films and exchange anisotropy,'' in Magnetism, vol. III, G. T. Rado and H. Suhl, Eds. New York: Academic, 1963, pp. 271--350.
