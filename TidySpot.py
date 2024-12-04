@@ -17,6 +17,8 @@ from navigation.PointCloudMapper import PointCloudMapper
 from navigation.Navigator import Navigator
 from controller.spot_controller import PositionCombiner
 
+from controller.spot_controller import SpotController, SpotArmIKController
+
 from utils import *
 from perception.ObjectDetector import ObjectDetector
 from grasping.GraspSelector import GraspSelector
@@ -94,6 +96,11 @@ def run_TidySpot(args):
         object_detector.set_name("object_detector")
         object_detector.connect_cameras(station, builder)
 
+        # Instantiate Controller
+        spot_plant = station.GetSubsystemByName("spot.controller").get_multibody_plant_for_control()
+        spot_controller = builder.AddSystem(SpotController(spot_plant, meshcat=meshcat))
+        spot_arm_ik_controller = builder.AddSystem(SpotArmIKController(spot_plant, use_teleop=False))
+
         #### GRASPING ####
 
         # Instantiate PointCloudCropper
@@ -128,17 +135,28 @@ def run_TidySpot(args):
         tidy_spot_planner.set_name("tidy_spot_fsm")
         tidy_spot_planner.connect_components(builder, grasper, point_cloud_mapper, navigator, station)
 
-        # Last component, add state interpolator which converts desired state to desired state and velocity
-        state_interpolator = builder.AddSystem(StateInterpolatorWithDiscreteDerivative(10, 0.1, suppress_initial_transient=True))
-        state_interpolator.set_name("state_interpolator")
-
         # Connect desired state through interpolator to robot
         builder.Connect(
             navigator.GetOutputPort("spot_commanded_state"),
-            state_interpolator.get_input_port()
+            spot_arm_ik_controller.GetInputPort("base_position"),
         )
         builder.Connect(
-            state_interpolator.get_output_port(),
+            navigator.GetOutputPort("spot_commanded_state"),
+            spot_controller.GetInputPort("base_position"),
+        )
+
+        builder.Connect(
+            controller_test.GetOutputPort("target_pose"), # Connect Grasping psoe output from Anygrasp here
+            spot_arm_ik_controller.GetInputPort("desired_pose"),
+        )
+
+        builder.Connect(
+            spot_arm_ik_controller.GetOutputPort("desired_spot_arm_position"),
+            spot_controller.GetInputPort("desired_arm_position"),
+        )
+        
+        builder.Connect(
+            spot_controller.get_output_port(),
             station.GetInputPort("spot.desired_state")
         )
 
