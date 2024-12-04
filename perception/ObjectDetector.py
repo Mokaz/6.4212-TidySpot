@@ -10,6 +10,7 @@ from pydrake.all import (
     Diagram,
     PointCloud,
     DepthImageToPointCloud,
+    RigidTransform,
 )
 from typing import List, Tuple
 import matplotlib.pyplot as plt
@@ -22,8 +23,8 @@ import cv2
 import numpy as np
 
 class ObjectDetector(LeafSystem):
-    def __init__(self, station: Diagram, camera_names: List[str], image_size: Tuple[int, int], 
-                 use_groundedsam: bool, groundedsam_path: str = os.path.join(os.getcwd(), "third_party/Grounded-Segment-Anything"), 
+    def __init__(self, station: Diagram, camera_names: List[str], image_size: Tuple[int, int],
+                 use_groundedsam: bool, groundedsam_path: str = os.path.join(os.getcwd(), "third_party/Grounded-Segment-Anything"),
                  device: str = "cpu"):
         LeafSystem.__init__(self)
 
@@ -33,7 +34,7 @@ class ObjectDetector(LeafSystem):
         else:
             # if we aren't using GroundedSAM, then we're using groundtruth
             from perception.GroundTruthSensor import GroundTruthSensor
-            self.perceptor = GroundTruthSensor()
+            self.perceptor = GroundTruthSensor(station)
 
         self._camera_names = camera_names
 
@@ -53,7 +54,7 @@ class ObjectDetector(LeafSystem):
                 for image_type, image_class in {
                     'rgb_image': ImageRgba8U,
                     'depth_image': ImageDepth32F,
-                    'label_image': ImageLabel16I
+                    'label_image': ImageLabel16I,
                 }.items()
             }
             for camera_name in camera_names
@@ -74,15 +75,16 @@ class ObjectDetector(LeafSystem):
     def Update(self, context, state):
         for camera_name in self._camera_names:
             rgb_image = cv2.cvtColor(self.get_color_image(camera_name, context).data, cv2.COLOR_RGBA2RGB)
-            mask, confidence = self.perceptor.detect_and_segment_objects(rgb_image, camera_name)
+            mask, confidence = self.perceptor.detect_and_segment_objects(rgb_image, camera_name, context)
 
     def SegmentFrontCameras(self, context: Context, output):
         # print("ObjectDetector: SegmentFrontCameras")
         frontleft_rgb_image = cv2.cvtColor(self.get_color_image("frontleft", context).data, cv2.COLOR_RGBA2RGB)
         frontright_rgb_image = cv2.cvtColor(self.get_color_image("frontright", context).data, cv2.COLOR_RGBA2RGB)
-
-        front_left_mask, front_left_confidence = self.perceptor.detect_and_segment_objects(frontleft_rgb_image, "frontleft")
-        front_right_mask, front_right_confidence = self.perceptor.detect_and_segment_objects(frontright_rgb_image, "frontright")
+        frontleft_label_image = self.get_label_image("frontleft", context).data
+        frontright_label_image = self.get_label_image("frontright", context).data
+        front_left_mask, front_left_confidence = self.perceptor.detect_and_segment_objects(frontleft_rgb_image, "frontleft", frontleft_label_image)
+        front_right_mask, front_right_confidence = self.perceptor.detect_and_segment_objects(frontright_rgb_image, "frontright", frontright_label_image)
 
         masks_confidences = [
             (front_left_mask, front_left_confidence, "frontleft"),
