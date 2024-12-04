@@ -146,7 +146,7 @@ def run_TidySpot(args):
         )
 
         builder.Connect(
-            controller_test.GetOutputPort("target_pose"), # Connect Grasping psoe output from Anygrasp here
+            grasp_selector.GetOutputPort("grasp_selection"), # Connect Grasping psoe output from Anygrasp here
             spot_arm_ik_controller.GetInputPort("desired_pose"),
         )
 
