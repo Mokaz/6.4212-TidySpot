@@ -12,7 +12,7 @@ class AnyGraspHandler:
     def _setup_anygrasp(self, anygrasp_path: str):
         try:
             add_anygrasp_to_path(anygrasp_path)
-            from anygrasp_sdk.grasp_detection.gsnet import AnyGrasp
+            from gsnet import AnyGrasp
 
             cfgs = SimpleNamespace(
                 checkpoint_path=os.path.join(anygrasp_path, 'grasp_detection', 'checkpoints', 'checkpoint_detection.tar'),
@@ -25,7 +25,7 @@ class AnyGraspHandler:
             self.anygrasp = AnyGrasp(cfgs)
             self.anygrasp.load_net()
             print("AnyGrasp initialized successfully.")
-        
+
         except ImportError as e:
             logging.error("AnyGrasp module not found. Ensure 'anygrasp_sdk' is correctly installed.")
             raise e
@@ -45,13 +45,13 @@ class AnyGraspHandler:
             colors (np.ndarray): Array of point colors.
             lims (list): List of limits [xmin, xmax, ymin, ymax, zmin, zmax].
             visualize (bool, optional): Flag to visualize the results. Defaults to False.
-        
+
         Returns:
             Grasp: The selected grasp.
         """
         if self.anygrasp is None:
             raise ValueError("AnyGrasp not initialized.")
-        
+
         # Flip the z points in the points array
         if flip_before_calc:
             points[:, 2] *= -1
@@ -78,7 +78,7 @@ class AnyGraspHandler:
             gg_pick = gg[0:10]
             print('Top grasp calculated with score:', gg_pick[0].score)
 
-        if flip_before_calc: 
+        if flip_before_calc:
             # Flip the z points back
             points[:, 2] *= -1
             gg_pick.translations[:, 2] = -gg_pick.translations[:, 2]
@@ -102,9 +102,9 @@ class AnyGraspHandler:
 
         if colors is not None:
             pcd.colors = o3d.utility.Vector3dVector(colors)
-        
+
         geometries = [pcd]
-        
+
         if gg is not None:
             grippers = gg.to_open3d_geometry_list()
             geometries.extend(grippers)
@@ -120,10 +120,10 @@ class AnyGraspHandler:
 
         if colors is not None:
             pcd.colors = o3d.utility.Vector3dVector(colors)
-        
+
         geometries = [pcd, g.to_open3d_geometry()]
-        
+
         axis = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.1)
         geometries.append(axis)
-        
+
         o3d.visualization.draw_geometries(geometries)
