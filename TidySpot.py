@@ -15,7 +15,7 @@ from manipulation.station import (
 from TidySpotFSM import TidySpotFSM
 from navigation.PointCloudMapper import PointCloudMapper
 from navigation.Navigator import Navigator
-from controller.spot_controller import PositionCombiner
+from controller.PositionCombiner import PositionCombiner
 
 from utils import *
 from perception.ObjectDetector import ObjectDetector
@@ -47,6 +47,11 @@ def run_TidySpot(args):
     use_grounded_sam = args.perception_type == "sam"
     device = args.device
     scenario_path = args.scenario
+
+    use_anygrasp = True
+    use_grounded_sam = True
+    device = "cuda"
+    scenario_path = "objects/simple_cracker_box_detection_test.yaml"
 
     try:
         ### Start the visualizer ###
