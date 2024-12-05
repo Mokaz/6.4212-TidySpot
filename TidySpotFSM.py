@@ -99,10 +99,10 @@ class TidySpotFSM(LeafSystem):
 
         if current_state == SpotState.IDLE:
             state.get_mutable_discrete_state(self.navigator_state_commanded).set_value([NavigationState.STOP.value])
-            
+
             # select a new area to explore and go to it
-            # self.set_new_random_exploration_goal()
-            self.set_new_exploration_goal((0, 1, None))
+            self.set_new_random_exploration_goal()
+            # self.set_new_exploration_goal((0, 1, None))
 
             print("State: IDLE -> EXPLORE")
             state.get_mutable_abstract_state(
@@ -114,7 +114,7 @@ class TidySpotFSM(LeafSystem):
             if self._get_navigation_completed(context, state):
                 state.get_mutable_discrete_state(self.navigator_state_commanded).set_value([NavigationState.STOP.value])
                 print("ASTAR DONE RECEIVED: Exploration completed to area.")
-                
+
                 if self.check_detections():
                     grid_points, centroid = self.object_clusters[1].values() # if object_clusters exists, there will always be one with key value 1
                     print(f"Found object at {centroid['world']}, approaching ...")
@@ -202,7 +202,7 @@ class TidySpotFSM(LeafSystem):
     def SetPathPlanningCurrentPosition(self, context, output):
         spot_body_pos = self.robot_state[:3]
         output.SetFromVector(spot_body_pos)
-    
+
     def check_detections(self):
         # print("self.object_clusters:", self.object_clusters)
         return bool(self.object_clusters)

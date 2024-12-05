@@ -76,8 +76,9 @@ directives:
 - add_model:
     name: table
     file: package://TidySpot_objects/table.sdf
-    default_free_body_pose:
-        table_body_link:
-            translation: [1.5, 0, 0.1]
-            rotation: !Rpy { deg: [90, 0, 90]}
-            
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: table::table_body_link
+    X_PC:
+        translation: [1.5, 0, -0.047]
+        rotation: !Rpy { deg: [90, 0, 90]}

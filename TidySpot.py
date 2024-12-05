@@ -107,7 +107,7 @@ def run_TidySpot(args):
         point_cloud_cropper.connect_ports(to_point_cloud, object_detector, builder)
 
         # Instantiate GraspSelector with use_anygrasp
-        grasp_selector = builder.AddSystem(GraspSelector(use_anygrasp))
+        grasp_selector = builder.AddSystem(GraspSelector(use_anygrasp, plant=plant, scene_graph=scene_graph, meshcat=meshcat))
         grasp_selector.set_name("grasp_selector")
         grasp_selector.connect_ports(point_cloud_cropper, builder)
 
@@ -220,7 +220,7 @@ def run_TidySpot(args):
         # grasp_selector.test_anygrasp_frontleft_pcd(to_point_cloud, context)
 
         # # Test segmentation on camera
-        
+
         # object_detector.test_segmentation(object_detector_context, "frontleft")
 
         # # Test cropping from segmentation on frontleft camera

@@ -26,7 +26,7 @@ class PointCloudMapper(LeafSystem):
             point_cloud_name: station.GetSubsystemByName(f"rgbd_sensor_{point_cloud_name}") for point_cloud_name in camera_names
         }
         self.meshcat = meshcat
-        
+
         # Input ports
         self._point_cloud_inputs = {
             point_cloud_name: self.DeclareAbstractInputPort(f"{point_cloud_name}.point_cloud", AbstractValue.Make(PointCloud())) for point_cloud_name in camera_names
@@ -67,7 +67,7 @@ class PointCloudMapper(LeafSystem):
             object_point_cloud_points = object_pcd.xyzs()
             valid_object_points = object_point_cloud_points[:, np.isfinite(object_point_cloud_points).all(axis=0)]  # Filter points that are finite
 
-            ox, oy, _, _ = self.pointcloud_to_grid(valid_object_points)  # Convert to grid (objects only)
+            ox, oy = self.object_pointcloud_to_grid(valid_object_points)  # Convert to grid (objects only)
             self.grid_map = self.update_grid_map(self.grid_map, ox, oy, [], [], value=2)  # Mark objects with value 2
 
         self.mark_robot_footprint_as_free()
@@ -90,6 +90,38 @@ class PointCloudMapper(LeafSystem):
 
         builder.Connect(point_cloud_cropper.GetOutputPort("cropped_point_cloud"), self._object_pcd_input)
 
+    def convert_to_grid_coordinates(self, x: float, y: float) -> Tuple[int, int]:
+        """
+        Converts a world coordinate to grid coordinates.
+
+        x, y: World coordinates
+        Returns:
+            ix, iy: Grid coordinates
+        """
+        ix = int(round(x / self.resolution)) + (self.grid_map.shape[0] // 2)
+        iy = int(round(y / self.resolution)) + (self.grid_map.shape[1] // 2)
+        return ix, iy
+
+    def object_pointcloud_to_grid(self, point_cloud: np.ndarray) -> Tuple[List[int], List[int], List[int], List[int]]:
+        """
+        Converts a point cloud to grid coordinates.
+
+        point_cloud: 3xN numpy array of points (x, y, z)
+        Returns:
+            ox, oy: Lists of grid coordinates representing obstacles
+            free_ox, free_oy: Lists of grid coordinates representing free space
+        """
+        # Initialize empty lists for objects
+        ox, oy = [], []
+
+        for i in range(point_cloud.shape[1]):
+            x, y = point_cloud[0, i], point_cloud[1, i]
+            ix, iy = self.convert_to_grid_coordinates(x, y)
+            ox.append(ix)
+            oy.append(iy)
+
+        return ox, oy
+
     def pointcloud_to_grid(self, point_cloud: np.ndarray) -> Tuple[List[int], List[int], List[int], List[int]]:
         """
         Converts a point cloud to grid coordinates.
@@ -108,15 +140,13 @@ class PointCloudMapper(LeafSystem):
 
         for i in range(obstacle_points.shape[1]):
             x, y = obstacle_points[0, i], obstacle_points[1, i]
-            ix = int(round(x / self.resolution)) + (self.grid_map.shape[0] // 2)  # Offset to center grid
-            iy = int(round(y / self.resolution)) + (self.grid_map.shape[1] // 2)  # Offset to center grid
+            ix, iy = self.convert_to_grid_coordinates(x, y)
             ox.append(ix)
             oy.append(iy)
 
         for i in range(free_points.shape[1]):
             x, y = free_points[0, i], free_points[1, i]
-            ix = int(round(x / self.resolution)) + (self.grid_map.shape[0] // 2)  # Offset to center grid
-            iy = int(round(y / self.resolution)) + (self.grid_map.shape[1] // 2)  # Offset to center grid
+            ix, iy = self.convert_to_grid_coordinates(x, y)
             free_ox.append(ix)
             free_oy.append(iy)
 
@@ -170,12 +200,12 @@ class PointCloudMapper(LeafSystem):
         for i in range(1, num_features + 1):
             cluster_indices = np.argwhere(labeled_grid == i)
             grid_points = cluster_indices.tolist()
-            
+
             # TODO: Add this in if we are getting incorrect pointclouds
-            # if len(grid_points) < 2: 
+            # if len(grid_points) < 2:
             #     # not enough points to register as an object?
             #     continue
-            
+
             # Calculate a good centroid that is part of the cluster
             centroid_index = len(cluster_indices) // 2  # Take the middle point in the sorted list as a centroid
             centroid_grid = cluster_indices[centroid_index]
@@ -204,4 +234,4 @@ class PointCloudMapper(LeafSystem):
         plt.ylabel("Y-axis (meters)")
         plt.colorbar(ticks=[-1, 0, 1, 2], label="Cell State (-1: Unexplored, 0: Free, 1: Obstacle, 2: Object)")
         plt.grid(True)
-        plt.show()
+        plt.show(block=False)
