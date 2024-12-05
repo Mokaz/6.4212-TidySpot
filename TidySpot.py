@@ -48,10 +48,10 @@ def run_TidySpot(args):
     device = args.device
     scenario_path = args.scenario
 
-    use_anygrasp = True
-    use_grounded_sam = True
-    device = "cuda"
-    scenario_path = "objects/simple_cracker_box_detection_test.yaml"
+    # use_anygrasp = True
+    # use_grounded_sam = True
+    # device = "cuda"
+    # scenario_path = "objects/simple_cracker_box_detection_test.yaml"
 
     try:
         ### Start the visualizer ###
