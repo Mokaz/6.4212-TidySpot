@@ -162,6 +162,7 @@ def run_TidySpot(args):
         context = diagram.CreateDefaultContext()
         diagram.set_name("tidyspot_diagram")
         export_diagram_as_svg(diagram, "diagram.svg")
+        grasp_selector.set_diagram(diagram)
 
         ### Simulation setup ###
         simulator = Simulator(diagram)

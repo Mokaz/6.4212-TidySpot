@@ -37,6 +37,7 @@ class AntipodalGraspHandler:
 
     def compute_darboux_frame(self, index, pcd, kdtree, ball_radius=0.002, max_nn=50):
         points = pcd.xyzs()
+        pcd.EstimateNormals(radius=0.01, num_closest=30)
         normals = pcd.normals()
 
         query = points[:, index]
@@ -80,7 +81,7 @@ class AntipodalGraspHandler:
         context = diagram.CreateDefaultContext()
         diagram.ForcedPublish(context)
 
-    def find_minimum_distance(self, pcd, X_WG):
+    def find_minimum_distance(self, pcd, X_WG, context):
         y_grid = np.linspace(-0.05, 0.05, 10)
 
         max_distance = 0
@@ -88,7 +89,7 @@ class AntipodalGraspHandler:
 
         for delta in y_grid:
             X_WGsearch = X_WG.multiply(RigidTransform([0, delta, 0]))
-            distance = self.compute_sdf(pcd, X_WGsearch)
+            distance = self.compute_sdf(pcd, context, X_WGsearch)
             if distance >= 0:
                 max_distance = distance
                 X_WGnew = X_WGsearch
@@ -140,7 +141,7 @@ class AntipodalGraspHandler:
 
         return is_nonempty
 
-    def compute_candidate_grasps(self, pcd, candidate_num=10, random_seed=5):
+    def compute_candidate_grasps(self, pcd, context, candidate_num=3, random_seed=5):
         x_min = -0.03
         x_max = 0.03
         phi_min = -np.pi / 3
@@ -163,35 +164,37 @@ class AntipodalGraspHandler:
             X_FT = RigidTransform(RotationMatrix.MakeZRotation(phi), [x, 0, 0])
             X_WT = X_WF.multiply(X_FT)
 
-            signed_distance, X_WG = self.find_minimum_distance(pcd, X_WT)
+            signed_distance, X_WG = self.find_minimum_distance(pcd, X_WT, context)
             if np.isnan(signed_distance) or X_WG is None:
                 continue
             if not self.check_collision(pcd, X_WG):
                 continue
 
-            if not self.check_nonempty(pcd, X_WG):
-                continue
+            # if not self.check_nonempty(pcd, X_WG):
+            #     continue
 
             candidate_lst.append(X_WG)
             candidate_count += 1
 
         return candidate_lst
 
-    def compute_sdf(self, pcd, X_G, visualize=False):
+    def compute_sdf(self, pcd, context, X_G, visualize=False):
         plant, scene_graph = self.plant, self.scene_graph
-        diagram = self.plant.GetParentDiagram()
-        context = diagram.CreateDefaultContext()
-        plant_context = plant.GetMyContextFromRoot(context)
-        scene_graph_context = scene_graph.GetMyContextFromRoot(context)
-        plant.SetFreeBodyPose(plant_context, plant.GetBodyByName("body"), X_G)
+        context = self.diagram.CreateDefaultContext()
+        plant_context = self.diagram.GetMutableSubsystemContext(plant, context)
+        scene_graph_context = self.diagram.GetMutableSubsystemContext(scene_graph, context)
+        # plant.SetFreeBodyPose(plant_context, plant.GetBodyByName("body"), X_G)
 
-        if visualize:
-            diagram.ForcedPublish(context)
-
+        # if visualize:
+        #     self.meshcat.Delete()
         query_object = scene_graph.get_query_output_port().Eval(scene_graph_context)
 
+        # Downsample the point cloud to reduce computation
+        sample_indices = np.random.choice(pcd.size(), size=min(100, pcd.size()), replace=False)
+        sampled_points = pcd.xyzs()[:, sample_indices]
+
         pcd_sdf = np.inf
-        for pt in pcd.xyzs().T:
+        for pt in sampled_points.T:
             distances = query_object.ComputeSignedDistanceToPoint(pt)
             for body_index in range(len(distances)):
                 distance = distances[body_index].distance
@@ -200,26 +203,25 @@ class AntipodalGraspHandler:
 
         return pcd_sdf
 
+    def set_diagram(self, diagram):
+        self.diagram = diagram
+
     def check_collision(self, pcd, X_G, visualize=False):
         sdf = self.compute_sdf(pcd, X_G, visualize)
         return sdf > 0
 
-    def run_grasp(self, points, colors, lims=None, flip_before_calc=True, visualize=False):
-        pcd = PointCloud(points.shape[0])
-        pcd.mutable_xyzs()[:] = points.T
-        pcd.mutable_rgbs()[:] = colors.T
+    def run_grasp(self, pcd, context, visualize=False):
+        # pcd = PointCloud(points.shape[0])
+        # pcd.mutable_xyzs()[:] = points.T
+        # #pcd.mutable_rgbs()[:] = colors.T
 
-        candidate_grasps = self.compute_candidate_grasps(pcd, candidate_num=10)
+        candidate_grasps = self.compute_candidate_grasps(pcd, context, candidate_num=10)
 
         if not candidate_grasps:
             print("No valid grasps found.")
             return None
 
         best_grasp = candidate_grasps[0]
-        for grasp in candidate_grasps:
-            _, grasp_candidate = self.find_minimum_distance(pcd, grasp)
-            if grasp_candidate is not None:
-                best_grasp = grasp_candidate
 
         if visualize:
             self.draw_grasp_candidate(best_grasp, refresh=True)
