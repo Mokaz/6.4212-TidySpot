@@ -8,13 +8,13 @@ directives:
 model_drivers:
     spot: !InverseDynamicsDriver
       gains:
-        arm_sh0: {kp: 1000, ki: 10, kd: 50}
-        arm_sh1: {kp: 1000, ki: 10, kd: 50}
-        arm_el0: {kp: 1000, ki: 10, kd: 50}
-        arm_el1: {kp: 1000, ki: 10, kd: 50}
-        arm_wr0: {kp: 1000, ki: 10, kd: 50}
-        arm_wr1: {kp: 1000, ki: 10, kd: 50}
-        arm_f1x: {kp: 3000, ki: 20, kd: 50}
+        arm_sh0: {kp: 100, ki: 10, kd: 50}
+        arm_sh1: {kp: 100, ki: 10, kd: 50}
+        arm_el0: {kp: 100, ki: 10, kd: 50}
+        arm_el1: {kp: 100, ki: 10, kd: 50}
+        arm_wr0: {kp: 100, ki: 10, kd: 50}
+        arm_wr1: {kp: 100, ki: 10, kd: 50}
+        arm_f1x: {kp: 300, ki: 20, kd: 50}
 cameras:
   back:
     X_BC:
