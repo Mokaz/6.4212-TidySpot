@@ -10,7 +10,6 @@ from pydrake.all import (
     PointCloud,
     DepthImageToPointCloud,
 )
-import open3d as o3d
 from typing import List, Tuple, Mapping
 
 class Grasper(LeafSystem):
@@ -50,7 +49,7 @@ class Grasper(LeafSystem):
 
 
     def connect_ports(self, grasp_selector, builder):
-        # builder.Connect( 
+        # builder.Connect(
         #     self.get_output_port(0), # Get output port "request_grasp" from TidySpotFSM
         #     grasp_selector.GetInputPort("do_grasp")
         # )

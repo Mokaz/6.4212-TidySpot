@@ -228,7 +228,7 @@ class TidySpotFSM(LeafSystem):
 
     def set_new_random_exploration_goal(self):
         # Random search
-        new_goal = (random.uniform(-5.0, 5.0), random.uniform(-5.0, 5.0))
+        new_goal = (random.uniform(-4.0, 4.0), random.uniform(-4.0, 4.0))
 
         print(f"Exploring environment, new exploration goal: {new_goal}")
 

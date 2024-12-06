@@ -62,6 +62,9 @@ class GraspSelector(LeafSystem):
             gg_ten_best = self.grasp_handler.run_grasp(points, colors, lims=None, visualize=False) # TODO: Implement more filtering
             g_best = gg_ten_best[0]
             output.set_value(RigidTransform(RotationMatrix(g_best.rotation_matrix), g_best.translation))
+        else:
+            g_best = self.grasp_handler.run_grasp(points, colors, visualize=False)
+            output.set_value(g_best)
 
     def test_anygrasp_frontleft_segmented_pcd(self, grasp_selector_context: Context):
         import open3d as o3d

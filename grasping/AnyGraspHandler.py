@@ -3,7 +3,6 @@ import logging
 from types import SimpleNamespace
 from grasping.grasp_utils import add_anygrasp_to_path
 import numpy as np
-import open3d as o3d
 
 class AnyGraspHandler:
     def __init__(self, anygrasp_path: str):
@@ -12,6 +11,7 @@ class AnyGraspHandler:
     def _setup_anygrasp(self, anygrasp_path: str):
         try:
             add_anygrasp_to_path(anygrasp_path)
+            import open3d as o3d
             from gsnet import AnyGrasp
 
             cfgs = SimpleNamespace(
@@ -97,6 +97,7 @@ class AnyGraspHandler:
         return gg_pick
 
     def visualize_pcd_with_grasps(self, points, colors=None, gg=None):
+        import open3d as o3d
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points)
 
@@ -115,6 +116,8 @@ class AnyGraspHandler:
         o3d.visualization.draw_geometries(geometries)
 
     def visualize_pcd_with_single_grasp(self, points: np.ndarray, g, colors = None):
+        import open3d as o3d
+
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points)
 

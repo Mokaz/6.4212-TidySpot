@@ -205,9 +205,9 @@ class AntipodalGraspHandler:
         return sdf > 0
 
     def run_grasp(self, points, colors, lims=None, flip_before_calc=True, visualize=False):
-        pcd = PointCloud(len(points[0]))
-        pcd.mutable_xyzs()[:] = points
-        pcd.mutable_rgbs()[:] = colors
+        pcd = PointCloud(points.shape[0])
+        pcd.mutable_xyzs()[:] = points.T
+        pcd.mutable_rgbs()[:] = colors.T
 
         candidate_grasps = self.compute_candidate_grasps(pcd, candidate_num=10)
 
