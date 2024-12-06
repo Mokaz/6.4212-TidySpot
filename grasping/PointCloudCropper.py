@@ -14,7 +14,6 @@ from pydrake.all import (
     BaseField,
     Fields,
 )
-import open3d as o3d
 from typing import List, Tuple, Mapping
 
 DO_DBSCAN_CLUSTERING = True
@@ -58,7 +57,7 @@ class PointCloudCropper(LeafSystem):
             output.set_value(PointCloud(0))
             print("CropPointcloud: No segmentation mask found")
             return
-        
+
         point_cloud = self.get_input_port(self._pcd_inputs_indexes[camera_name]).Eval(context)
 
         # DEBUG: Visualize the original point cloud
@@ -107,7 +106,7 @@ class PointCloudCropper(LeafSystem):
     def connect_ports(self, to_point_cloud: Mapping[str, DepthImageToPointCloud], object_detector, builder: DiagramBuilder):
         for camera_name in self._camera_names:
             builder.Connect(
-                to_point_cloud[camera_name].GetOutputPort(f"point_cloud"), 
+                to_point_cloud[camera_name].GetOutputPort(f"point_cloud"),
                 self.get_input_port(self._pcd_inputs_indexes[camera_name])
             )
 
@@ -164,10 +163,11 @@ class PointCloudCropper(LeafSystem):
         self.visualize_pcd(segmented_points_viz, segmented_colors_viz)
 
     def visualize_pcd(self, points, colors=None):
+        import open3d as o3d
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(points)
 
         if colors is not None:
             pcd.colors = o3d.utility.Vector3dVector(colors)
-        
+
         o3d.visualization.draw_geometries([pcd])

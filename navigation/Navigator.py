@@ -64,18 +64,18 @@ class Navigator(LeafSystem):
         self._current_position = self.DeclareDiscreteState(3)  # x, y, theta
         self._trajectory_flag = self.DeclareDiscreteState(1)  # Boolean flag for trajectory update
         self._navigation_complete = self.DeclareDiscreteState(1)  # Boolean flag for trajectory update
-        self._spot_commanded_state = self.DeclareDiscreteState(10)  # Vector of size 20
+        self._spot_commanded_position = self.DeclareDiscreteState(3)  # Vector of size 3
         self._previous_navigator_state = self.DeclareDiscreteState([0])  # Flag to ensure self.goal is set only once per mission. Initialize with 0 (False)
 
         # Input ports
         self._grid_map_input_index = self.DeclareAbstractInputPort("grid_map", AbstractValue.Make(np.zeros((100, 100)))).get_index()
         self._goal_input_index = self.DeclareVectorInputPort("goal", 3).get_index()
         self._current_position_input_index = self.DeclareVectorInputPort("current_position", 3).get_index()
-        self._navigator_state_input_index = self.DeclareVectorInputPort("navigator_state", 1).get_index() 
+        self._navigator_state_input_index = self.DeclareVectorInputPort("navigator_state", 1).get_index()
 
         # Output ports
         self.DeclareStateOutputPort("navigation_complete", self._navigation_complete)
-        self.DeclareVectorOutputPort("spot_commanded_state", 10, self.UpdateDesiredState)
+        self.DeclareVectorOutputPort("spot_commanded_position", 3, self.UpdateDesiredState)
 
         # Trajectory storage
         self.trajectory = None
@@ -87,17 +87,14 @@ class Navigator(LeafSystem):
         # Periodic update for trajectory generation
         self._state_update_event = self.DeclarePeriodicUnrestrictedUpdateEvent(self.time_step, 0.0, self.UpdateTrajectory)
 
-        # Initialize desired state
-        desired_position = np.array([0.0, 0.0, 0.0])
-        self.desired_arm_state = [0.0, -3.1, 3.1, 0.0, 0.0, 0.0, 0.0] # default stowed arm state
-        
-        self.spot_commanded_state = np.concatenate([desired_position, self.desired_arm_state])
+        # Initialize desired position
+        self.spot_commanded_position = np.array([0.0, 0.0, 0.0])
 
     def connect_mapper(self, point_cloud_mapper, station: Diagram, builder: DiagramBuilder):
         builder.Connect(point_cloud_mapper.get_output_port(0), self.get_input_port(self._grid_map_input_index)) # Output grid_map from mapper to input grid_map of planner
 
     def UpdateDesiredState(self, context: Context, output):
-        output.SetFromVector(self.spot_commanded_state)
+        output.SetFromVector(self.spot_commanded_position)
 
     def UpdateTrajectory(self, context: Context, state):
         """Generate or update the trajectory based on the FSM flag and goal."""
@@ -220,7 +217,7 @@ class Navigator(LeafSystem):
                             self.meshcat.SetObject(
                                 f"planned_path/point_{i}",
                                 Sphere(radius=0.01),
-                                Rgba(1, 0, 0, 1) 
+                                Rgba(1, 0, 0, 1)
                             )
                             self.meshcat.SetTransform(
                                 f"planned_path/point_{i}",
@@ -262,13 +259,13 @@ class Navigator(LeafSystem):
 
         # print("Desired position: ({:.3f}, {:.3f}, {:.3f})".format(*desired_position))
 
-        self.spot_commanded_state = np.concatenate([desired_position, self.desired_arm_state])
+        self.spot_commanded_position = np.array(desired_position)
 
-        if np.any(np.isnan(self.spot_commanded_state)):
-            print("Warning: spot_commanded_state contains NaN values. Resetting to current position.")
-            self.spot_commanded_state = np.concatenate([current_position[:3], self.desired_arm_state])
+        if np.any(np.isnan(self.spot_commanded_position)):
+            print("Warning: spot_commanded_position contains NaN values. Resetting to current position.")
+            self.spot_commanded_position = np.array(current_position[:3])
 
-        state.get_mutable_discrete_state(self._spot_commanded_state).SetFromVector(self.spot_commanded_state)
+        state.get_mutable_discrete_state(self._spot_commanded_position).SetFromVector(self.spot_commanded_position)
         state.get_mutable_discrete_state(self._previous_navigator_state).set_value([navigator_state])
 
 

@@ -15,13 +15,14 @@ from manipulation.station import (
 from TidySpotFSM import TidySpotFSM
 from navigation.PointCloudMapper import PointCloudMapper
 from navigation.Navigator import Navigator
+
 from controller.PositionCombiner import PositionCombiner
+from controller.SpotArmIKController import SpotArmIKController
 
 from utils import *
 from perception.ObjectDetector import ObjectDetector
 from grasping.GraspSelector import GraspSelector
 from grasping.PointCloudCropper import PointCloudCropper
-from grasping.Grasper import Grasper
 
 import os
 import sys
@@ -111,11 +112,6 @@ def run_TidySpot(args):
         grasp_selector.set_name("grasp_selector")
         grasp_selector.connect_ports(point_cloud_cropper, builder)
 
-        # Instantiate Grasper
-        grasper = builder.AddSystem(Grasper())
-        grasper.set_name("grasper")
-        grasper.connect_ports(grasp_selector, builder)
-
         ### PLANNER ###
 
         # Add point cloud mapper for path planner
@@ -128,10 +124,24 @@ def run_TidySpot(args):
         navigator.set_name("navigator")
         navigator.connect_mapper(point_cloud_mapper, station, builder)
 
+        ### CONTROLLING ###
+
+        # Add IK controller for to solve arm positions for grasping
+        spot_arm_ik_controller = builder.AddSystem(SpotArmIKController(plant))
+        spot_arm_ik_controller.set_name("spot_arm_ik_controller")
+        spot_arm_ik_controller.connect_components(builder, station, navigator, grasp_selector)
+
+        # Add position combiner to combine base and arm position commands
+        position_combiner = builder.AddSystem(PositionCombiner())
+        position_combiner.set_name("position_combiner")
+        position_combiner.connect_components(builder, spot_arm_ik_controller, navigator)
+
+        ### FSM ###
+
         # Add Finite State Machine = TidySpotFSM
         tidy_spot_planner = builder.AddSystem(TidySpotFSM(plant, bin_location))
         tidy_spot_planner.set_name("tidy_spot_fsm")
-        tidy_spot_planner.connect_components(builder, grasper, point_cloud_mapper, navigator, station)
+        tidy_spot_planner.connect_components(builder, spot_arm_ik_controller, point_cloud_mapper, navigator, station)
 
         # Last component, add state interpolator which converts desired state to desired state and velocity
         state_interpolator = builder.AddSystem(StateInterpolatorWithDiscreteDerivative(10, 0.1, suppress_initial_transient=True))
@@ -139,7 +149,7 @@ def run_TidySpot(args):
 
         # Connect desired state through interpolator to robot
         builder.Connect(
-            navigator.GetOutputPort("spot_commanded_state"),
+            position_combiner.GetOutputPort("spot_commanded_state"),
             state_interpolator.get_input_port()
         )
         builder.Connect(
@@ -152,6 +162,7 @@ def run_TidySpot(args):
         context = diagram.CreateDefaultContext()
         diagram.set_name("tidyspot_diagram")
         export_diagram_as_svg(diagram, "diagram.svg")
+        grasp_selector.set_diagram(diagram)
 
         ### Simulation setup ###
         simulator = Simulator(diagram)

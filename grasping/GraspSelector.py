@@ -9,8 +9,10 @@ from pydrake.all import (
     LeafSystem,
     PointCloud,
     DepthImageToPointCloud,
-    RotationMatrix
+    RotationMatrix,
 )
+
+from manipulation.meshcat_utils import AddMeshcatTriad
 from grasping.grasp_utils import add_anygrasp_to_path
 from typing import List, Tuple, Mapping
 
@@ -19,6 +21,7 @@ class GraspSelector(LeafSystem):
         LeafSystem.__init__(self)
         self._use_anygrasp = use_anygrasp
         self.grasp_handler = None
+        self.meshcat = meshcat
 
         if use_anygrasp:
             import open3d as o3d
@@ -42,6 +45,9 @@ class GraspSelector(LeafSystem):
             self._point_cloud_input
         )
 
+    def set_diagram(self, diagram):
+        self.grasp_handler.set_diagram(diagram)
+
     def SelectGrasp(self, context: Context, output):
         point_cloud = self._point_cloud_input.Eval(context)
         points = point_cloud.xyzs().T.astype(np.float32)
@@ -61,7 +67,14 @@ class GraspSelector(LeafSystem):
         if self._use_anygrasp:
             gg_ten_best = self.grasp_handler.run_grasp(points, colors, lims=None, visualize=False) # TODO: Implement more filtering
             g_best = gg_ten_best[0]
-            output.set_value(RigidTransform(RotationMatrix(g_best.rotation_matrix), g_best.translation))
+            g_best =RigidTransform(RotationMatrix(g_best.rotation_matrix), g_best.translation)
+            output.set_value(g_best)
+        else: # Antipodal
+            g_best = self.grasp_handler.run_grasp(point_cloud, context, visualize=False)
+            output.set_value(g_best)
+
+        # visualize the best grasp
+        AddMeshcatTriad(self.meshcat, "best_grasp_pose", length=0.025, radius=0.001, X_PT=g_best)
 
     def test_anygrasp_frontleft_segmented_pcd(self, grasp_selector_context: Context):
         import open3d as o3d
