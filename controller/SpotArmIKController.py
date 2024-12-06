@@ -16,7 +16,7 @@ q_in_front = [ 0, -0.32,  2, 0, -0.1, 0,  0]
 PRINT = True
 
 class SpotArmIKController(LeafSystem):
-    """Given a desire pose, compute the joint angles for Spot's arm.
+    """Given a desired pose, compute the joint angles for Spot's arm.
 
     Currently, for debugging purpose, it is configured such that, it
     will try to reach the banana whenever possible (i.e. if IK succeeds).

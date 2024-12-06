@@ -15,7 +15,7 @@ from typing import List, Tuple, Dict
 from scipy.ndimage import label
 
 ADD_DETECTIONS_TO_GRIDMAP = True
-VISUALIZE_GRID_MAP = True
+VISUALIZE_GRID_MAP = False
 
 class PointCloudMapper(LeafSystem):
     def __init__(self, station: Diagram, camera_names: List[str], point_clouds, resolution, robot_radius, height_threshold=0.1, meshcat=None):
@@ -31,7 +31,7 @@ class PointCloudMapper(LeafSystem):
         self._point_cloud_inputs = {
             point_cloud_name: self.DeclareAbstractInputPort(f"{point_cloud_name}.point_cloud", AbstractValue.Make(PointCloud())) for point_cloud_name in camera_names
         }
-        self._object_pcd_input = self.DeclareAbstractInputPort(f"cropped_point_cloud", AbstractValue.Make(PointCloud()))
+        self._object_pcd_input = self.DeclareAbstractInputPort(f"object_detection_cropped_point_clouds", AbstractValue.Make(PointCloud()))
 
         # Output ports
         self.DeclareAbstractOutputPort("grid_map", lambda: AbstractValue.Make(np.full((100, 100), -1)), self.CalcGridMap)
@@ -88,7 +88,7 @@ class PointCloudMapper(LeafSystem):
             builder.Connect(point_cloud_output, point_cloud_input)
             # builder.Connect(label_image_output, label_image_input)
 
-        builder.Connect(point_cloud_cropper.GetOutputPort("cropped_point_cloud"), self._object_pcd_input)
+        builder.Connect(point_cloud_cropper.GetOutputPort("object_detection_cropped_point_clouds"), self._object_pcd_input)
 
     def convert_to_grid_coordinates(self, x: float, y: float) -> Tuple[int, int]:
         """
@@ -234,4 +234,4 @@ class PointCloudMapper(LeafSystem):
         plt.ylabel("Y-axis (meters)")
         plt.colorbar(ticks=[-1, 0, 1, 2], label="Cell State (-1: Unexplored, 0: Free, 1: Obstacle, 2: Object)")
         plt.grid(True)
-        plt.show(block=False)
+        plt.show()
