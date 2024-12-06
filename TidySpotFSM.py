@@ -42,7 +42,7 @@ class TidySpotFSM(LeafSystem):
         self.DeclareVectorInputPort("object_detected", 1)
         self.DeclareVectorInputPort("navigation_complete", 1)
 
-        self.DeclareVectorInputPort("grasp_completed", 1) # TODO: Add success/fail flag to data sent to this port
+        self.DeclareVectorInputPort("grasp_complete", 1) # TODO: Add success/fail flag to data sent to this port
 
         # Output ports
         # Declare output ports for the path planner. The path planner then sends to the actual robot
@@ -52,7 +52,8 @@ class TidySpotFSM(LeafSystem):
         self._path_planning_position_output = self.DeclareVectorOutputPort("path_planning_position", 3, self.SetPathPlanningCurrentPosition).get_index()
 
         # Output ports for various components
-        self.DeclareVectorOutputPort("request_grasp", 1, lambda context, output: print("Setting request_grasp output...")) # TODO: Replace lambda with function that sets output based on criteria (attempth count etc.)
+        self.grasp_requested = self.DeclareDiscreteState(1) # Use a state of 1 to represent a boolean
+        self.DeclareStateOutputPort("grasp_requested", self.grasp_requested)
 
         self.DeclareInitializationUnrestrictedUpdateEvent(self._initialize_state)
         self.DeclarePeriodicUnrestrictedUpdateEvent(0.1, 0.0, self.Update)
@@ -76,7 +77,7 @@ class TidySpotFSM(LeafSystem):
 
         # Connect the grasper to the FSM planner
         builder.Connect(self.GetOutputPort("request_grasp"), grasper.GetInputPort("do_grasp"))
-        builder.Connect(grasper.GetOutputPort("done_grasp"), self.GetInputPort("grasp_completed"))
+        builder.Connect(grasper.GetOutputPort("done_grasp"), self.GetInputPort("grasp_complete"))
 
     def get_spot_state_input_port(self):
         return self.GetInputPort("body_poses")
@@ -89,6 +90,11 @@ class TidySpotFSM(LeafSystem):
         navigator_state_commanded = state.get_mutable_discrete_state(self.navigator_state_commanded).get_value()[0]
         navigation_complete = self.GetInputPort("navigation_complete").Eval(context)[0]
         return navigation_complete and navigator_state_commanded
+
+    def _get_grasping_completed(self, context, state):
+        grasp_requested = state.get_mutable_discrete_state(self.grasp_requested).get_value()[0]
+        grasp_complete = self.GetInputPort("grasping_complete").Eval(context)[0]
+        return grasp_complete and grasp_requested
 
     def Update(self, context, state):
         current_state = context.get_abstract_state(int(self._state_index)).get_value()
@@ -146,14 +152,16 @@ class TidySpotFSM(LeafSystem):
                 state.get_mutable_abstract_state(
                     int(self._state_index)
                 ).set_value(SpotState.GRASP_OBJECT)
-
+                # Send the grasp request to the grasper
+                state.get_mutable_discrete_state(self.grasp_requested).set_value([1])
+                print("Grasp requested.")
             else:
                 # print("Approaching object at ", self.current_object_location)
                 state.get_mutable_discrete_state(self.navigator_state_commanded).set_value([NavigationState.MOVE_NEAR_OBJECT.value])
 
 
         elif current_state == SpotState.GRASP_OBJECT:
-            if self.grasp_object():
+            if self._get_grasping_completed(context, state):
                 print("Grasping object successful.")
 
                 print(f"Transporting object to bin at {self.bin_location} ...")
@@ -164,10 +172,8 @@ class TidySpotFSM(LeafSystem):
                     int(self._state_index)
                 ).set_value(SpotState.TRANSPORT_OBJECT)
             else:
-                print("Failed to grasp object. Returning to EXPLORE.")
-                state.get_mutable_abstract_state(
-                    int(self._state_index)
-                ).set_value(SpotState.EXPLORE)
+                print("Currently grasping object")
+                # Assume there is no failure state here
 
         elif current_state == SpotState.TRANSPORT_OBJECT:
             if self._get_navigation_completed(context, state):
@@ -210,12 +216,6 @@ class TidySpotFSM(LeafSystem):
     def approach_object(self, object_location):
         self.path_planning_goal = (object_location[0], object_location[1], None)
 
-    def grasp_object(self):
-        # Grasp the object using AnyGrasp or other methods
-        print("Grasping the object...")
-        # Actual grasping code here
-        success = True  # Assume success in simulation
-        return success
 
     def transport_object(self):
         self.path_planning_goal = (self.bin_location[0], self.bin_location[1], None)

@@ -7,3 +7,6 @@
 [submodule "third_party/anygrasp_sdk"]
 	path = third_party/anygrasp_sdk
 	url = https://github.com/graspnet/anygrasp_sdk.git
+[submodule "third_party/graspnetAPI"]
+	path = third_party/graspnetAPI
+	url = https://github.com/graspnet/graspnetAPI.git
