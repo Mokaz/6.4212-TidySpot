@@ -74,7 +74,7 @@ class GraspSelector(LeafSystem):
             output.set_value(g_best)
 
         # visualize the best grasp
-        AddMeshcatTriad(self.meshcat, "best_grasp_pose", length=0.025, radius=0.001, X_PT=g_best)
+        AddMeshcatTriad(self.meshcat, "best_grasp_pose", length=0.05, radius=0.01, X_PT=g_best)
 
     def test_anygrasp_frontleft_segmented_pcd(self, grasp_selector_context: Context):
         import open3d as o3d
