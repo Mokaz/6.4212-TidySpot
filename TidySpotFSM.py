@@ -76,7 +76,7 @@ class TidySpotFSM(LeafSystem):
         builder.Connect(point_cloud_mapper.GetOutputPort("object_clusters"), self._object_clusters_input) # TODO: Check that output name is correct
 
         # Connect the grasper to the FSM planner
-        builder.Connect(self.GetOutputPort("request_grasp"), grasper.GetInputPort("do_grasp"))
+        builder.Connect(self.GetOutputPort("grasp_requested"), grasper.GetInputPort("do_grasp"))
         builder.Connect(grasper.GetOutputPort("done_grasp"), self.GetInputPort("grasp_complete"))
 
     def get_spot_state_input_port(self):

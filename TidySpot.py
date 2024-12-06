@@ -17,7 +17,7 @@ from navigation.PointCloudMapper import PointCloudMapper
 from navigation.Navigator import Navigator
 
 from controller.PositionCombiner import PositionCombiner
-from controller.Arm_IKController_FSM import SpotArmIKController
+from controller.SpotArmIKController import SpotArmIKController
 
 from utils import *
 from perception.ObjectDetector import ObjectDetector
@@ -127,12 +127,12 @@ def run_TidySpot(args):
         ### CONTROLLING ###
 
         # Add IK controller for to solve arm positions for grasping
-        spot_arm_ik_controller = builder.AddSystem(SpotArmIKController(plant, old_nav=True))
+        spot_arm_ik_controller = builder.AddSystem(SpotArmIKController(plant))
         spot_arm_ik_controller.set_name("spot_arm_ik_controller")
         spot_arm_ik_controller.connect_components(builder, station, navigator, grasp_selector)
 
         # Add position combiner to combine base and arm position commands
-        position_combiner = builder.AddSystem(PositionCombiner(old_nav=True))
+        position_combiner = builder.AddSystem(PositionCombiner())
         position_combiner.set_name("position_combiner")
         position_combiner.connect_components(builder, spot_arm_ik_controller, navigator)
 
