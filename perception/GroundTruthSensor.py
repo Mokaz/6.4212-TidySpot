@@ -48,18 +48,10 @@ class GroundTruthSensor:
                 render_label = perception_props.GetProperty("label", "id")
                 # Map the render label to an object identifier
                 object_name = inspector.GetName(geometry_id)
-                label_to_object[object_name] = int(render_label)
+                if object_name.startswith("obj_"):
+                    label_to_object[object_name] = int(render_label)
 
-        model_names = [ #TODO: Programmatically get all the objects by filtering though non wall models or grab from yaml?
-            'book1::book',
-            'book2::book',
-            'book3::book',
-            'book4::book',
-        ]
-        self.models = {
-            model_name: label_to_object[model_name] for model_name in model_names
-        }
-
+        self.models = label_to_object
         # Get the indices of each model
         #model_indices =
 
