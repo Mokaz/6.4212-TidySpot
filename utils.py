@@ -269,7 +269,7 @@ def clutter_gen(num_items: int, spawn_area: Tuple[float, float], scene_file: str
 
         yaml_content += f"""
 - add_model:
-    name: obj{i}
+    name: obj_{i}
     file: package://manipulation/hydro/{ycb[object_num]}
     default_free_body_pose:
         {ycb_bases[object_num]}:
