@@ -64,6 +64,8 @@ class PointCloudCropper(LeafSystem):
     def CropObjectDetectionPointClouds(self, context: Context, output):
         segmentation_masks_dict = self._object_detection_segmentations_input.Eval(context)
         cropped_point_cloud = self.CropPointCloudBySegmentation(context, output, segmentation_masks_dict)
+        if cropped_point_cloud is None:
+            output.set_value(PointCloud(0))
         output.set_value(cropped_point_cloud)
 
     def CropGraspingObjectPointCloud(self, context: Context, output):
@@ -76,9 +78,9 @@ class PointCloudCropper(LeafSystem):
             output.set_value(PointCloud(0))
             print("CropPointcloud: No segmentation masks received.")
             return
-        
+
         cropped_point_cloud_list = []
-        
+
         for camera_name, mask in segmentation_masks_dict.items():
             segmentation_mask = mask.flatten()
 
