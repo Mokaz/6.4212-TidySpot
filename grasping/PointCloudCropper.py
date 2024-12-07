@@ -66,7 +66,8 @@ class PointCloudCropper(LeafSystem):
         cropped_point_cloud = self.CropPointCloudBySegmentation(context, output, segmentation_masks_dict)
         if cropped_point_cloud is None:
             output.set_value(PointCloud(0))
-        output.set_value(cropped_point_cloud)
+        else:
+            output.set_value(cropped_point_cloud)
 
     def CropGraspingObjectPointCloud(self, context: Context, output):
         segmentation_masks_dict = self._grasping_object_segmentation_input.Eval(context)
