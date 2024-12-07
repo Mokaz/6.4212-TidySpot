@@ -18,7 +18,7 @@ ADD_DETECTIONS_TO_GRIDMAP = True
 VISUALIZE_GRID_MAP = False
 
 class PointCloudMapper(LeafSystem):
-    def __init__(self, station: Diagram, camera_names: List[str], point_clouds, resolution, robot_radius, height_threshold=0.1, meshcat=None):
+    def __init__(self, station: Diagram, camera_names: List[str], point_clouds, resolution, robot_length=1.1, robot_width=0.5, height_threshold=0.1, meshcat=None):
         LeafSystem.__init__(self)
         self._point_clouds = point_clouds
         self._camera_names = camera_names
@@ -27,6 +27,7 @@ class PointCloudMapper(LeafSystem):
         }
         self.meshcat = meshcat
 
+        self.DeclareVectorInputPort("spot.state_estimated",20)
         # Input ports
         self._point_cloud_inputs = {
             point_cloud_name: self.DeclareAbstractInputPort(f"{point_cloud_name}.point_cloud", AbstractValue.Make(PointCloud())) for point_cloud_name in camera_names
@@ -38,10 +39,13 @@ class PointCloudMapper(LeafSystem):
         self.DeclareAbstractOutputPort("object_clusters", lambda: AbstractValue.Make({}), self.CalcObjectClusters)
 
         self.resolution = resolution
-        self.robot_radius = robot_radius
         self.grid_map = np.full((100, 100), -1)  # Initialized with a fixed size grid map with unexplored (-1)
         self.height_threshold = height_threshold  # Threshold to differentiate between free space and obstacles
         self.object_clusters = {}  # Dictionary to hold obstacle clusters
+        self.robot_grid_pos = (0, 0)  # Initialize robot position in grid coordinates
+        self.robot_theta = 0  # Initialize robot orientation
+        self.robot_length = robot_length
+        self.robot_width = robot_width
 
     def CalcObjectClusters(self, context: Context, output: AbstractValue):
         # Set the output to the current object clusters
@@ -49,7 +53,9 @@ class PointCloudMapper(LeafSystem):
 
     def CalcGridMap(self, context: Context, output: AbstractValue):
         # Reset grid map to unexplored at the start of each update
-        self.grid_map.fill(-1)
+        self.robot_state = self.GetInputPort("spot.state_estimated").Eval(context)
+        self.robot_grid_pos = self.convert_to_grid_coordinates(self.robot_state[0], self.robot_state[1]) # convert robot position to grid coordinates
+        self.robot_theta = self.robot_state[2] # get robot orientation
 
         # Process regular point clouds to mark obstacles
         for camera_name in self._camera_names:
@@ -78,7 +84,7 @@ class PointCloudMapper(LeafSystem):
 
         output.set_value(self.grid_map)
 
-    def connect_point_clouds(self, point_cloud_cropper, station: Diagram, builder: DiagramBuilder):
+    def connect_components(self, point_cloud_cropper, station: Diagram, builder: DiagramBuilder):
         for camera_name in self._camera_names:
             point_cloud_output = self._point_clouds[camera_name].GetOutputPort("point_cloud")
             point_cloud_input = self._point_cloud_inputs[camera_name]
@@ -89,6 +95,11 @@ class PointCloudMapper(LeafSystem):
             # builder.Connect(label_image_output, label_image_input)
 
         builder.Connect(point_cloud_cropper.GetOutputPort("object_detection_cropped_point_clouds"), self._object_pcd_input)
+
+        builder.Connect(
+            station.GetOutputPort("spot.state_estimated"),
+            self.GetInputPort("spot.state_estimated"),
+        )
 
     def convert_to_grid_coordinates(self, x: float, y: float) -> Tuple[int, int]:
         """
@@ -163,30 +174,33 @@ class PointCloudMapper(LeafSystem):
         Returns:
             Updated grid map
         """
-        for x, y in zip(ox, oy):
-            if 0 <= x < grid_map.shape[0] and 0 <= y < grid_map.shape[1]:
-                grid_map[x, y] = value  # Mark cell as occupied (obstacle or object)
-
         for x, y in zip(free_ox, free_oy):
             if 0 <= x < grid_map.shape[0] and 0 <= y < grid_map.shape[1]:
                 # Mark as free even if it was previously marked as an obstacle, to reflect dynamic changes
                 grid_map[x, y] = 0  # Mark cell as free space
+        for x, y in zip(ox, oy):
+            if 0 <= x < grid_map.shape[0] and 0 <= y < grid_map.shape[1]:
+                grid_map[x, y] = value  # Mark cell as occupied (obstacle or object)
+
         return grid_map
 
     def mark_robot_footprint_as_free(self):
         """
         Marks the grid cells corresponding to the robot's footprint as free space.
-
-        # TODO: make this the actual footprint of the robot
         """
-        center_x, center_y = self.grid_map.shape[0] // 2, self.grid_map.shape[1] // 2
-        radius_in_cells = int(self.robot_radius / self.resolution)
-        for dx in range(-radius_in_cells, radius_in_cells + 1):
-            for dy in range(-radius_in_cells, radius_in_cells + 1):
-                if dx ** 2 + dy ** 2 <= radius_in_cells ** 2:  # Check if within robot radius
-                    x, y = center_x + dx, center_y + dy
-                    if 0 <= x < self.grid_map.shape[0] and 0 <= y < self.grid_map.shape[1]:
-                        self.grid_map[x, y] = 0  # Mark as free, regardless of previous state
+        center_x, center_y = self.convert_to_grid_coordinates(self.robot_state[0], self.robot_state[1])
+        half_length_cells = int(self.robot_length / (2 * self.resolution))
+        half_width_cells = int(self.robot_width / (2 * self.resolution))
+
+        for dx in range(-half_length_cells, half_length_cells + 1):
+            for dy in range(-half_width_cells, half_width_cells + 1):
+                # Rotate the point based on the robot's orientation
+                rotated_x = dx * math.cos(self.robot_theta) - dy * math.sin(self.robot_theta)
+                rotated_y = dx * math.sin(self.robot_theta) + dy * math.cos(self.robot_theta)
+                x = int(center_x + rotated_x)
+                y = int(center_y + rotated_y)
+                if 0 <= x < self.grid_map.shape[0] and 0 <= y < self.grid_map.shape[1]:
+                    self.grid_map[x, y] = 0  # Mark as free, regardless of previous state
 
     def cluster_objects(self):
         """

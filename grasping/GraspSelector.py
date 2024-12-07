@@ -22,6 +22,7 @@ class GraspSelector(LeafSystem):
         self._use_anygrasp = use_anygrasp
         self.grasp_handler = None
         self.meshcat = meshcat
+        self.visualize = True
 
         if use_anygrasp:
             import open3d as o3d
@@ -51,18 +52,23 @@ class GraspSelector(LeafSystem):
     def SelectGrasp(self, context: Context, output):
         point_cloud = self._point_cloud_input.Eval(context)
         points = point_cloud.xyzs().T.astype(np.float32)
-        colors = point_cloud.rgbs().T.astype(np.float32) / 255.0
-
         valid_mask = np.isfinite(points).all(axis=1)
 
+        if point_cloud.has_rgbs():
+            colors = point_cloud.rgbs().T.astype(np.float32) / 255.0
+            colors = colors[valid_mask]
+        else:
+            colors = None
+
         points = points[valid_mask]
-        colors = colors[valid_mask]
 
         if points.shape[0] == 0:
             print("ANYGRASP: No points in the specified limits.")
             return
 
-        # self.visualize_pcd_with_grasps(points, colors)
+        if self.visualize:
+            self.meshcat.SetObject("cropped_point_cloud", point_cloud, point_size=0.01)
+        #self.visualize_pcd_with_grasps(points, colors)
 
         if self._use_anygrasp:
             gg_ten_best = self.grasp_handler.run_grasp(points, colors, lims=None, visualize=False) # TODO: Implement more filtering

@@ -74,8 +74,10 @@ class AnyGraspHandler:
         print('Running AnyGrasp...')
         gg, cloud = self.anygrasp.get_grasp(**kwargs)
 
-        if len(gg) == 0:
+        if gg is None or len(gg) == 0:
             print('No Grasp detected after collision detection!') # TODO: Implement retry mechanism
+            # For now raise an error
+            raise ValueError("No Grasp detected after collision detection!")
         else:
             gg = gg.nms().sort_by_score() # TODO: Grasp filtering based on orientation compared to Spot
             gg_pick = gg[0:10]

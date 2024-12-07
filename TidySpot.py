@@ -115,19 +115,20 @@ def run_TidySpot(args):
         ### PLANNER ###
 
         # Add point cloud mapper for path planner
-        point_cloud_mapper = builder.AddSystem(PointCloudMapper(station, camera_names, to_point_cloud, resolution=0.1, robot_radius=0.6, meshcat=meshcat))
+        point_cloud_mapper = builder.AddSystem(PointCloudMapper(station, camera_names, to_point_cloud, resolution=0.1,  meshcat=meshcat))
         point_cloud_mapper.set_name("point_cloud_mapper")
-        point_cloud_mapper.connect_point_clouds(point_cloud_cropper, station, builder)
+        point_cloud_mapper.connect_components(point_cloud_cropper, station, builder)
 
         # Add path planner and mapper
-        navigator = builder.AddSystem(Navigator(station, builder, np.array([0,0,0]), resolution=0.1, robot_radius=0.6, meshcat=meshcat, visualize=True))
+        navigator = builder.AddSystem(Navigator(station, builder, np.array([0,0,0]), resolution=0.1, meshcat=meshcat, visualize=True))
         navigator.set_name("navigator")
         navigator.connect_mapper(point_cloud_mapper, station, builder)
 
         ### CONTROLLING ###
 
         # Add IK controller for to solve arm positions for grasping
-        spot_arm_ik_controller = builder.AddSystem(SpotArmIKController(plant))
+        spot_plant = station.GetSubsystemByName("spot.controller").get_multibody_plant_for_control()
+        spot_arm_ik_controller = builder.AddSystem(SpotArmIKController(spot_plant))
         spot_arm_ik_controller.set_name("spot_arm_ik_controller")
         spot_arm_ik_controller.connect_components(builder, station, navigator, grasp_selector)
 
