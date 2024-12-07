@@ -94,7 +94,7 @@ class AnyGraspHandler:
             gg_pick.rotation_matrices = gg_pick.rotation_matrices * S
 
         if visualize:
-            self.visualize_pcd_with_grasps(points, colors, gg_pick) # TODO: Send to meshcat?
+            # self.visualize_pcd_with_grasps(points, colors, gg_pick)
             self.visualize_pcd_with_single_grasp(points, gg_pick[0], colors)
 
         return gg_pick

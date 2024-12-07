@@ -67,7 +67,7 @@ class GraspSelector(LeafSystem):
         if self._use_anygrasp:
             gg_ten_best = self.grasp_handler.run_grasp(points, colors, lims=None, visualize=False) # TODO: Implement more filtering
             g_best = gg_ten_best[0]
-            g_best =RigidTransform(RotationMatrix(g_best.rotation_matrix), g_best.translation)
+            g_best = RigidTransform(RotationMatrix(g_best.rotation_matrix).multiply(RotationMatrix.MakeXRotation(-np.pi/2)), g_best.translation)
             output.set_value(g_best)
         else: # Antipodal
             g_best = self.grasp_handler.run_grasp(point_cloud, context, visualize=False)
