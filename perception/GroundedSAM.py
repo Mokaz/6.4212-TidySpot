@@ -11,6 +11,9 @@ torchvision.disable_beta_transforms_warning()
 import warnings
 warnings.filterwarnings("ignore", message="annotate is deprecated:*")
 warnings.filterwarnings("ignore", message="torch.meshgrid: in an upcoming release, it will be required to pass the indexing argument.*")
+warnings.filterwarnings("ignore", category=FutureWarning, message="The `device` argument is deprecated")
+warnings.filterwarnings("ignore", message="None of the inputs have requires_grad=True")
+
 
 class GroundedSAM:
     def __init__(self, groundedsam_path: str, device: str = "cuda"):
@@ -140,7 +143,7 @@ class GroundedSAM:
         cv2.imwrite("groundingdino_annotated_image.jpg", annotated_frame)
         # Convert the annotated image back to BGR before saving
         bgr_annotated_image = cv2.cvtColor(annotated_image, cv2.COLOR_RGB2BGR)
-        cv2.imwrite("grounded_sam_annotated_image.jpg", bgr_annotated_image)
+        cv2.imwrite(f"grounded_sam_annotated_image_{camera_name}.jpg", bgr_annotated_image)
 
 
         if len(detections.mask) > 0 and len(detections.confidence) > 0:

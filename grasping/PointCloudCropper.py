@@ -133,7 +133,7 @@ class PointCloudCropper(LeafSystem):
 
         cropped_point_cloud = Concatenate(cropped_point_cloud_list)
 
-        print("PointCloudCropper: CropPointCloudBySegmentation, sending to PointCloudMapper")
+        # print("PointCloudCropper: CropPointCloudBySegmentation, sending to PointCloudMapper")
         return cropped_point_cloud
 
     def connect_ports(self, to_point_cloud: Mapping[str, DepthImageToPointCloud], object_detector, builder: DiagramBuilder):

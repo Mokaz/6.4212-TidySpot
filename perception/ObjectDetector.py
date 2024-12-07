@@ -22,6 +22,8 @@ import os
 import cv2
 import numpy as np
 
+from TidySpotFSM import SpotState
+
 class ObjectDetector(LeafSystem):
     def __init__(self, station: Diagram, camera_names: List[str], image_size: Tuple[int, int],
                  use_groundedsam: bool, groundedsam_path: str = os.path.join(os.getcwd(), "third_party/Grounded-Segment-Anything"),
@@ -45,6 +47,8 @@ class ObjectDetector(LeafSystem):
             }
 
         # Input ports
+        self.fsm_state_input = self.DeclareAbstractInputPort("fsm_state", AbstractValue.Make(SpotState.IDLE))
+
         self._camera_inputs_indexes = {
             camera_name: {
                 image_type: self.DeclareAbstractInputPort(
@@ -75,6 +79,11 @@ class ObjectDetector(LeafSystem):
 
     def SegmentAllCameras(self, context: Context, output):
         # print("ObjectDetector: SegmentAllCameras")
+        fsm_state = self.fsm_state_input.Eval(context)
+        if fsm_state == SpotState.GRASP_OBJECT:
+            output.set_value({})
+            return
+
         segmentation_mask_dict = {}
         for camera_name in self._camera_names:
             if camera_name == "back":  # Skip back camera because of obscured view
@@ -84,10 +93,10 @@ class ObjectDetector(LeafSystem):
             mask, confidence = self.perceptor.detect_and_segment_objects(rgb_image, camera_name, label_image)
             if mask is not None:
                 segmentation_mask_dict[camera_name] = mask
-        # if segmentation_mask_dict:
-        #     print(f"Detected {len(segmentation_mask_dict)} objects! Sending masks to PointCloudCropper")
-        # else: 
-        #     print("No objects detected")
+        if segmentation_mask_dict:
+            print(f"Detected {len(segmentation_mask_dict)} objects! Sending masks to PointCloudCropper")
+        else: 
+            print("No objects detected")
         output.set_value(segmentation_mask_dict)
         # print("ObjectDetector: SegmentAllCameras complete)
 

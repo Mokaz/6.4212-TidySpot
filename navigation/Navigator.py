@@ -145,7 +145,7 @@ class Navigator(LeafSystem):
                     add_sphere_to_meshcat_xy_plane(self.meshcat, "goal_original", self.goal, radius=0.05, rgba=[0, 0, 1, 1])
 
                 if navigator_state == NavigationState.MOVE_NEAR_OBJECT.value:
-                    approach_distance = 1  # Distance to stop before the object (in meters)
+                    approach_distance = 0.85  # Distance to stop before the object (in meters)
                     direction_vector = self.goal[:2] - current_position[:2]
                     distance_to_goal = np.linalg.norm(direction_vector)
                     if distance_to_goal > approach_distance:

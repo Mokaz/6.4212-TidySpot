@@ -25,14 +25,17 @@ class TidySpotFSM(LeafSystem):
     def __init__(self, plant, bin_location=[0, 0, 0]):
         LeafSystem.__init__(self)
 
-        # Spot's internal planning states
+        # Internal states
         self._state_index = self.DeclareAbstractState(AbstractValue.Make(SpotState.IDLE))
+        self.navigator_state_commanded = self.DeclareDiscreteState(1)
 
-        self._times_index = self.DeclareAbstractState(
-            AbstractValue.Make({"initial": 0.0})
-        )
+        self._times_index = self.DeclareAbstractState(AbstractValue.Make({"initial": 0.0}))
         self._attempts_index = self.DeclareDiscreteState(1)
 
+        # Internal variables
+        self.bin_location = bin_location
+        self.path_planning_goal = (0, 0, 0)  # Goal for path planning, if self.path_planning_goal[2] == None then Navigator will autogenerate final heading
+        
         # Input ports
         self._spot_body_state_index = self.DeclareVectorInputPort("body_poses", 20).get_index()
         self._path_planning_desired_index = self.DeclareVectorInputPort("path_planning_desired", 3).get_index()
@@ -46,40 +49,38 @@ class TidySpotFSM(LeafSystem):
 
         # Output ports
         # Declare output ports for the path planner. The path planner then sends to the actual robot
-        self.navigator_state_commanded = self.DeclareDiscreteState(1)
+        self.DeclareStateOutputPort("fsm_state", self._state_index)
         self.DeclareStateOutputPort("navigator_state_commanded", self.navigator_state_commanded)
         self._path_planning_goal_output = self.DeclareVectorOutputPort("path_planning_goal", 3, self.SetPathPlanningGoal).get_index()
         self._path_planning_position_output = self.DeclareVectorOutputPort("path_planning_position", 3, self.SetPathPlanningCurrentPosition).get_index()
 
         # Output ports for various components
-        self.grasp_requested = self.DeclareDiscreteState(1) # Use a state of 1 to represent a boolean
-        self.DeclareStateOutputPort("grasp_requested", self.grasp_requested)
+        self.do_arm_controller_mission = self.DeclareDiscreteState(1) # Use a state of 1 to represent a boolean
+        self.DeclareStateOutputPort("do_arm_controller_mission", self.do_arm_controller_mission)
 
         self.DeclareInitializationUnrestrictedUpdateEvent(self._initialize_state)
         self.DeclarePeriodicUnrestrictedUpdateEvent(0.1, 0.0, self.Update)
 
-        # Declare internal variables
-        self.bin_location = bin_location
-        self.path_planning_goal = (0, 0, 0)  # Goal for path planning, if self.path_planning_goal[2] == None then Navigator will autogenerate final heading
-
-
-    def connect_components(self, builder, grasper, point_cloud_mapper, navigator, station):
+    def connect_components(self, builder, object_detector, spot_arm_ik_controller, point_cloud_mapper, navigator, station):
         builder.Connect(station.GetOutputPort("spot.state_estimated"), self.get_input_port(self._spot_body_state_index))
 
-        # Connect the Navigator to the TidySpotFSM
+        # Connect the FSM to ObjectDetector
+        builder.Connect(self.GetOutputPort("fsm_state"), object_detector.GetInputPort("fsm_state"))
+
+        # Connect the Navigator to the FSM
         builder.Connect(self.get_output_port(self._path_planning_goal_output), navigator.GetInputPort("goal"))
         builder.Connect(self.get_output_port(self._path_planning_position_output), navigator.GetInputPort("current_position"))
         builder.Connect(navigator.GetOutputPort("navigation_complete"), self.GetInputPort("navigation_complete"))
         builder.Connect(self.GetOutputPort("navigator_state_commanded"), navigator.GetInputPort("navigator_state"))
 
-        # Connect the detection dict to the FSM planner
+        # Connect the Mapper's detected objects dictionary to the FSM
         builder.Connect(point_cloud_mapper.GetOutputPort("object_clusters"), self._object_clusters_input) # TODO: Check that output name is correct
         # connect the mappers frontier to the FSM
         builder.Connect(point_cloud_mapper.GetOutputPort("frontier"), self.GetInputPort("frontier"))
 
-        # Connect the grasper to the FSM planner
-        builder.Connect(self.GetOutputPort("grasp_requested"), grasper.GetInputPort("do_grasp"))
-        builder.Connect(grasper.GetOutputPort("done_grasp"), self.GetInputPort("grasp_complete"))
+        # Connect the grasper to the FSM
+        builder.Connect(self.GetOutputPort("do_arm_controller_mission"), spot_arm_ik_controller.GetInputPort("do_arm_controller_mission"))
+        builder.Connect(spot_arm_ik_controller.GetOutputPort("done_grasp"), self.GetInputPort("grasp_complete"))
 
     def get_spot_state_input_port(self):
         return self.GetInputPort("body_poses")
@@ -94,9 +95,9 @@ class TidySpotFSM(LeafSystem):
         return navigation_complete and navigator_state_commanded
 
     def _get_grasping_completed(self, context, state):
-        grasp_requested = state.get_mutable_discrete_state(self.grasp_requested).get_value()[0]
+        do_arm_controller_mission = state.get_mutable_discrete_state(self.do_arm_controller_mission).get_value()[0]
         grasp_complete = self.GetInputPort("grasp_complete").Eval(context)[0]
-        return grasp_complete and grasp_requested
+        return grasp_complete and do_arm_controller_mission
 
     def Update(self, context, state):
         current_state = context.get_abstract_state(int(self._state_index)).get_value()
@@ -156,7 +157,7 @@ class TidySpotFSM(LeafSystem):
                     int(self._state_index)
                 ).set_value(SpotState.GRASP_OBJECT)
                 # Send the grasp request to the grasper
-                state.get_mutable_discrete_state(self.grasp_requested).set_value([1])
+                state.get_mutable_discrete_state(self.do_arm_controller_mission).set_value([1])
                 print("Grasp requested.")
             else:
                 # print("Approaching object at ", self.current_object_location)
@@ -175,8 +176,9 @@ class TidySpotFSM(LeafSystem):
                     int(self._state_index)
                 ).set_value(SpotState.TRANSPORT_OBJECT)
             else:
-                print("Currently grasping object")
+                # print("Currently grasping object")
                 # Assume there is no failure state here
+                pass
 
         elif current_state == SpotState.TRANSPORT_OBJECT:
             if self._get_navigation_completed(context, state):
@@ -237,6 +239,8 @@ class TidySpotFSM(LeafSystem):
 
         # clip the goal to slightly inside the bounds
         new_goal = (np.clip(new_goal[0], -4.5, 4.5), np.clip(new_goal[1], -4.5, 4.5))
+
+
 
         print(f"Exploring environment, new exploration goal: {new_goal}")
 
