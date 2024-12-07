@@ -82,13 +82,15 @@ class Navigator(LeafSystem):
         self.waypoints = None
         self.current_waypoint_idx = 0
         self.goal = None
+        self.iters_at_current_waypoint = 0
+        self.max_iters_at_current_waypoint = 10
 
         # Periodic update for trajectory generation
         self._state_update_event = self.DeclarePeriodicUnrestrictedUpdateEvent(self.time_step, 0.0, self.UpdateTrajectory)
 
         # Initialize desired position
         self.spot_commanded_position = np.array([0.0, 0.0, 0.0])
-        self.downsample = True
+        self.downsample = False
         self.inflate_obstacles = True
         self.allow_unknown_pathing = True
         self.goal_object_location = None
@@ -140,7 +142,43 @@ class Navigator(LeafSystem):
                         state.get_mutable_discrete_state(self._navigation_complete).set_value([1])
                         desired_position = current_position[:3]
 
-            if self.waypoints is None:
+            # if we don't have waypoints already and we haven't timed out of being at the waypoint
+            if self.waypoints is not None and self.iters_at_current_waypoint < self.max_iters_at_current_waypoint:
+                self.iters_at_current_waypoint += 1
+                current_waypoint = self.waypoints[self.current_waypoint_idx]
+
+                # Check if we've reached the current waypoint
+                distance_to_waypoint = np.linalg.norm(current_waypoint[:2] - current_position[:2])
+                # if we are at the last waypoint, make sure we also match the heading and have more precision on the last point
+                angle_okay = True # we don't really care about angle unless its the last point
+                threshold = 0.3
+                # iteratively check nodes, since we might satisfy multiple conditions of sequential nodes
+                while distance_to_waypoint < threshold and angle_okay:  # 10cm threshold
+                    if self.current_waypoint_idx == len(self.waypoints) - 1:
+                        angle_okay = abs(current_position[2] - current_waypoint[2]) < 0.2 # about 10 degrees
+                        threshold = 0.15
+                        if not (distance_to_waypoint < threshold and angle_okay):
+                            # if we haven't satisfied the stricter conditions of the last node, break
+                            break
+                        # otherwise, allow the last node to be satisfied
+                    # increment the node
+                    self.current_waypoint_idx += 1
+                    self.iters_at_current_waypoint = 0
+                    if self.current_waypoint_idx >= len(self.waypoints):
+                        # print("Reached final waypoint, DONE ASTAR")
+                        state.get_mutable_discrete_state(self._navigation_complete).set_value([1])
+                        self.waypoints = None
+                        self.current_waypoint_idx = 0
+                        break
+                    else:
+                        current_waypoint = self.waypoints[self.current_waypoint_idx]
+                        distance_to_waypoint = np.linalg.norm(current_waypoint[:2] - current_position[:2])
+
+                # Follow existing trajectory
+                desired_position = current_waypoint
+            # also need this iters check to see if we're stuck, then replan
+            elif self.waypoints is None or self.iters_at_current_waypoint >= self.max_iters_at_current_waypoint:
+                self.iters_at_current_waypoint = 0
                 # print("Generating new A* path to:", self.goal)
                 # Calculate new A* path
                 grid_map = self.EvalAbstractInput(context, self._grid_map_input_index).get_value()
@@ -240,30 +278,6 @@ class Navigator(LeafSystem):
                     state.get_mutable_discrete_state(self._navigation_complete).set_value([1])
                     desired_position = current_position[:3]
 
-            elif self.waypoints is not None:
-                current_waypoint = self.waypoints[self.current_waypoint_idx]
-
-                # Check if we've reached the current waypoint
-                distance_to_waypoint = np.linalg.norm(current_waypoint[:2] - current_position[:2])
-                # if we are at the last waypoint, make sure we also match the heading and have more precision on the last point
-                angle_okay = True # we don't really care about angle unless its the last point
-                threshold = 0.2
-                if self.current_waypoint_idx == len(self.waypoints) - 1:
-                    angle_okay = abs(current_position[2] - current_waypoint[2]) < 0.2 # about 10 degrees
-                    threshold = 0.1
-                if distance_to_waypoint < threshold and angle_okay:  # 10cm threshold
-                    self.current_waypoint_idx += 1
-                    if self.current_waypoint_idx >= len(self.waypoints):
-                        # print("Reached final waypoint, DONE ASTAR")
-                        state.get_mutable_discrete_state(self._navigation_complete).set_value([1])
-                        self.waypoints = None
-                        self.current_waypoint_idx = 0
-                    else:
-                        current_waypoint = self.waypoints[self.current_waypoint_idx]
-
-
-                # Follow existing trajectory
-                desired_position = current_waypoint
 
         else:
             # Reset trajectory when not executing
