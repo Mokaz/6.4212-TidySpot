@@ -93,7 +93,7 @@ class TidySpotFSM(LeafSystem):
 
     def _get_grasping_completed(self, context, state):
         grasp_requested = state.get_mutable_discrete_state(self.grasp_requested).get_value()[0]
-        grasp_complete = self.GetInputPort("grasping_complete").Eval(context)[0]
+        grasp_complete = self.GetInputPort("grasp_complete").Eval(context)[0]
         return grasp_complete and grasp_requested
 
     def Update(self, context, state):
