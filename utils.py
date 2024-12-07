@@ -1,5 +1,6 @@
 from pydrake.all import Diagram
-from typing import BinaryIO, Optional, Union, Tuple
+from typing import BinaryIO, Optional, Union, Tuple, List
+import random
 import pydot
 import logging
 import torch
@@ -41,7 +42,7 @@ class DrakeWarningFilter(logging.Filter):
             return False
         return True
 
-    
+
 def export_diagram_as_svg(diagram: Diagram, file: Union[BinaryIO, str]) -> None:
     if type(file) is str:
         file = open(file, "bw")
@@ -58,7 +59,7 @@ def cleanup_resources():
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats()
         torch.cuda.empty_cache()
-    
+
     # Force garbage collection
     import gc
     gc.collect()
@@ -91,10 +92,10 @@ import numpy as np
 def get_bin_translation(scenario, bin_link_name):
     """
     Extracts the translation of planar_bin::bin_base from the scenario directives.
-    
+
     Parameters:
         scenario (object): The scenario object containing directives.
-    
+
     Returns:
         numpy.ndarray: Translation array of the bin if found, otherwise [0, 0, 0].
     """
@@ -103,7 +104,7 @@ def get_bin_translation(scenario, bin_link_name):
          directive.add_weld and directive.add_weld.child == bin_link_name),
         None
     )
-    
+
     if bin_weld_directive:
         return bin_weld_directive.add_weld.X_PC.translation
     else:
@@ -217,17 +218,17 @@ def AddPointClouds(
     return to_point_cloud
 
 def clutter_gen(num_items: int, spawn_area: Tuple[float, float], scene_file: str, goal_file: str, forbidden_areas: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []):
-    ycb = ["003_cracker_box.sdf", "004_sugar_box.sdf", "005_tomato_soup_can.sdf", 
+    ycb = ["003_cracker_box.sdf", "004_sugar_box.sdf", "005_tomato_soup_can.sdf",
            "006_mustard_bottle.sdf", "009_gelatin_box.sdf", "010_potted_meat_can.sdf"]
-    ycb_bases = ["base_link_cracker", "base_link_sugar", "base_link_soup", 
+    ycb_bases = ["base_link_cracker", "base_link_sugar", "base_link_soup",
                  "base_link_mustard", "base_link_gelatin", "base_link_meat"]
-    
+
     # Step 0: Check if we are in the right directory
     current_directory = os.getcwd()
     if not current_directory.endswith("6.4212_TidySpot"):
         scene_path = os.path.join("6.4212_TidySpot", scene_file)
         goal_path = os.path.join("6.4212_TidySpot", goal_file)
-    else: 
+    else:
         scene_path = scene_file
         goal_path = goal_file
 
@@ -243,26 +244,26 @@ def clutter_gen(num_items: int, spawn_area: Tuple[float, float], scene_file: str
     rng = random.Random()  # Initialize a random generator
     for i in range(num_items):
         object_num = rng.randint(0, len(ycb) - 1)
-        
+
         # Generate a position and check if it's within any forbidden rectangular area
         in_forbidden_area = True
         while in_forbidden_area:
             in_forbidden_area = False
             x_pos = rng.uniform(-spawn_area[0], spawn_area[0])
             y_pos = rng.uniform(-spawn_area[1], spawn_area[1])
-            
+
             # Check if the position is in any forbidden rectangular area
             for (corner1, corner2) in forbidden_areas:
                 x_min = min(corner1[0], corner2[0])
                 x_max = max(corner1[0], corner2[0])
                 y_min = min(corner1[1], corner2[1])
                 y_max = max(corner1[1], corner2[1])
-                
+
                 # Check if (x_pos, y_pos) is within the rectangle
                 if x_min <= x_pos <= x_max and y_min <= y_pos <= y_max:
                     in_forbidden_area = True
                     break
-            
+
             # If not in a forbidden area, proceed
             if not in_forbidden_area:
                 break
