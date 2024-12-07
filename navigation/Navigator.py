@@ -91,6 +91,7 @@ class Navigator(LeafSystem):
         self.downsample = True
         self.inflate_obstacles = True
         self.allow_unknown_pathing = True
+        self.goal_object_location = None
 
     def connect_mapper(self, point_cloud_mapper, station: Diagram, builder: DiagramBuilder):
         builder.Connect(point_cloud_mapper.get_output_port(0), self.get_input_port(self._grid_map_input_index)) # Output grid_map from mapper to input grid_map of planner
@@ -129,6 +130,9 @@ class Navigator(LeafSystem):
                     distance_to_goal = np.linalg.norm(direction_vector)
                     if distance_to_goal > approach_distance:
                         adjusted_goal_position = current_position[:2] + (direction_vector / distance_to_goal) * (distance_to_goal - approach_distance)
+                        # calculate the heading between the adjusted goal position and the original goal position
+                        # This way we ensure we rotate towards the original goal position
+                        self.goal[2] = np.arctan2(self.goal[1] - adjusted_goal_position[1], self.goal[0] - adjusted_goal_position[0])
                         self.goal[:2] = adjusted_goal_position
                         # print(f"Adjusted goal position for approach: {self.goal[:2]}")
                     else:
@@ -241,7 +245,13 @@ class Navigator(LeafSystem):
 
                 # Check if we've reached the current waypoint
                 distance_to_waypoint = np.linalg.norm(current_waypoint[:2] - current_position[:2])
-                if distance_to_waypoint < 0.2:  # 10cm threshold
+                # if we are at the last waypoint, make sure we also match the heading and have more precision on the last point
+                angle_okay = True # we don't really care about angle unless its the last point
+                threshold = 0.2
+                if self.current_waypoint_idx == len(self.waypoints) - 1:
+                    angle_okay = abs(current_position[2] - current_waypoint[2]) < 0.2 # about 10 degrees
+                    threshold = 0.1
+                if distance_to_waypoint < threshold and angle_okay:  # 10cm threshold
                     self.current_waypoint_idx += 1
                     if self.current_waypoint_idx >= len(self.waypoints):
                         # print("Reached final waypoint, DONE ASTAR")
