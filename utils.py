@@ -217,6 +217,30 @@ def AddPointClouds(
 
     return to_point_cloud
 
+def convert_to_grid_coordinates(x: float, y: float, resolution: float, shape: Tuple) -> Tuple[int, int]:
+    """
+    Converts a world coordinate to grid coordinates.
+
+    x, y: World coordinates
+    Returns:
+        ix, iy: Grid coordinates
+    """
+    ix = int(round(x / resolution)) + (shape[0] // 2)
+    iy = int(round(y / resolution)) + (shape[1] // 2)
+    return ix, iy
+
+def convert_to_world_coordinates(ix: int, iy: int, resolution: float, shape: Tuple) -> Tuple[float, float]:
+    """
+    Converts grid coordinates to world coordinates.
+
+    ix, iy: Grid coordinates
+    Returns:
+        x, y: World coordinates
+    """
+    x = (ix - (shape[0] // 2)) * resolution
+    y = (iy - (shape[1] // 2)) * resolution
+    return x, y
+
 def clutter_gen(num_items: int, spawn_area: Tuple[float, float], scene_file: str, goal_file: str, forbidden_areas: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []):
     ycb = ["003_cracker_box.sdf", "004_sugar_box.sdf", "005_tomato_soup_can.sdf",
            "006_mustard_bottle.sdf", "009_gelatin_box.sdf", "010_potted_meat_can.sdf"]
