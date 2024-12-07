@@ -90,6 +90,7 @@ class Navigator(LeafSystem):
         self.spot_commanded_position = np.array([0.0, 0.0, 0.0])
         self.downsample = True
         self.inflate_obstacles = True
+        self.allow_unknown_pathing = True
 
     def connect_mapper(self, point_cloud_mapper, station: Diagram, builder: DiagramBuilder):
         builder.Connect(point_cloud_mapper.get_output_port(0), self.get_input_port(self._grid_map_input_index)) # Output grid_map from mapper to input grid_map of planner
@@ -143,8 +144,11 @@ class Navigator(LeafSystem):
                 self.grid_center_index = self.grid_size[0] // 2
 
                 if self.inflate_obstacles:
+                    if self.allow_unknown_pathing:
+                        grid_map = np.where(grid_map == -1, 0, grid_map)  # Replace -1 with 0
+
                     # Inflate obstacles in the grid map
-                    grid_map = binary_dilation(grid_map, iterations=2) # the robot is 1.1m long and 0.5m wide, if we do 2 iterations, obstacles expand to 0.4 around. hopefully this is enough
+                    grid_map = binary_dilation(grid_map, iterations=4) # the robot is 1.1m long and 0.5m wide, if we do 2 iterations, obstacles expand to 0.4 around. hopefully this is enough
 
                 # Use A* to find the path
                 rx, ry = self.planning(current_position, self.goal, grid_map)
