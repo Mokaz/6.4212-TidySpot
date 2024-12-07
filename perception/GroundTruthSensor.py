@@ -2,97 +2,78 @@ import numpy as np
 from pydrake.geometry import RenderEngineVtkParams, MakeRenderEngineVtk
 from pydrake.geometry import PerceptionProperties, RenderLabel, Role
 
+from pydrake.all import (
+    AbstractValue,
+    DiagramBuilder,
+    LeafSystem,
+    Context,
+    ImageRgba8U,
+    ImageDepth32F,
+    ImageLabel16I,
+    Diagram,
+    PointCloud,
+    DepthImageToPointCloud,
+    RigidTransform,
+)
+import cv2
+from skimage import color
+from PIL import Image
 
-def assign_label_to_body_for_renderer(plant, scene_graph, body, label_id, renderer_name):
-    perception_props = PerceptionProperties()
-    perception_props.AddProperty("label", "id", RenderLabel(label_id))
-    for geometry_id in plant.GetVisualGeometriesForBody(body):
-        scene_graph.AssignRole(
-            source_id=plant.get_source_id(),
-            geometry_id=geometry_id,
-            properties=perception_props,
-            role=Role.kPerception,
-            renderer=renderer_name,  # Assign to the specific renderer
-            skip_property_merge=False,
-        )
+from pydrake.geometry import RoleAssign
 
 class GroundTruthSensor:
     #TODO: implement
-    def __init__(self, station, camera_names, label_camera_names, image_size, use_grounded_sam, device='cpu'):
-        super().__init__()
+    def __init__(self, station):
         self.station = station
-        self.camera_names = camera_names
-        self.label_camera_names = label_camera_names
-        self.image_size = image_size
-        self.use_grounded_sam = use_grounded_sam
 
         # Get plant and scene_graph
         plant = self.station.GetSubsystemByName("plant")
-        scene_graph = self.station.GetSubsystemByName("scene_graph")
+        self.scene_graph = self.station.GetSubsystemByName("scene_graph")
+        # Get the inspector
+        inspector = self.scene_graph.model_inspector()
 
-            # Add renderers
-        original_renderer_name = "original_renderer"
-        scene_graph.AddRenderer(original_renderer_name, MakeRenderEngineVtk(RenderEngineVtkParams()))
+        # Retrieve all geometry IDs
+        all_geometry_ids = inspector.GetAllGeometryIds()
 
-        label_renderer_name = "label_renderer"
-        scene_graph.AddRenderer(label_renderer_name, MakeRenderEngineVtk(RenderEngineVtkParams()))
+        # Initialize the label-to-object mapping
+        label_to_object = {}
 
-        model_labels = {
-            'book1': 1,
-            'book2': 2,
-            'book3': 3,
-            'book4': 4,
-            'planar_bin': 5,
-            'table': 6,
-        }
+        # Iterate over all geometries
+        for geometry_id in all_geometry_ids:
+            # Get the perception properties of the geometry
+            perception_props = inspector.GetPerceptionProperties(geometry_id)
+            if perception_props is None:
+                continue
+            if perception_props.HasProperty("label", "id"):
+                render_label = perception_props.GetProperty("label", "id")
+                # Map the render label to an object identifier
+                object_name = inspector.GetName(geometry_id)
+                if object_name.startswith("obj_"):
+                    label_to_object[object_name] = int(render_label)
 
-        for model_name, label_id in model_labels.items():
-            model_instance = plant.GetModelInstanceByName(model_name)
-            body_indices = plant.GetBodyIndices(model_instance)
-            for body_index in body_indices:
-                body = plant.get_body(body_index)
-                assign_label_to_body_for_renderer(
-                    plant, scene_graph, body, label_id, label_renderer_name)
+        self.models = label_to_object
+        # Get the indices of each model
+        #model_indices =
 
-        
+    def detect_and_segment_objects(self, rgb_image: np.ndarray, camera_name: str, label_image: np.ndarray):
+        """detect and segment
 
-        # Declare input ports for color images (original cameras)
-        self.color_image_input_ports = {}
-        for camera_name in camera_names:
-            port = self.DeclareAbstractInputPort(
-                f"{camera_name}_rgb_image",
-                AbstractValue.Make(ImageRgba8U())
-            )
-            self.color_image_input_ports[camera_name] = port
+        Args:
+            rgb_image (np.ndarray): _description_
+            camera_name (str): _description_
+            label_image (np.ndarray): _description_
 
-        # Declare input ports for label images (label cameras)
-        self.label_image_input_ports = {}
-        for camera_name in label_camera_names:
-            port = self.DeclareAbstractInputPort(
-                f"{camera_name}_label_image",
-                AbstractValue.Make(ImageLabel16I())
-            )
-            self.label_image_input_ports[camera_name] = port
+        Returns:
+            mask: image of bools, where true represents object and false represents not an object
+            confidence: float, the confidence value
+        """
+        # Extract the target indices from the models dictionary
+        target_indices = list(self.models.values())
 
-        # Rest of your initialization code...
-
-    def connect_cameras(self, station, builder):
-        # Connect the color image output ports of the original cameras
-        for camera_name in self.camera_names:
-            camera_system = station.GetSubsystemByName(camera_name)
-            color_image_output_port = camera_system.color_image_output_port()
-            builder.Connect(
-                color_image_output_port,
-                self.get_input_port(f"{camera_name}_rgb_image")
-            )
-
-        # Connect the label image output ports of the label cameras
-        for camera_name in self.label_camera_names:
-            camera_system = station.GetSubsystemByName(camera_name)
-            label_image_output_port = camera_system.label_image_output_port()
-            builder.Connect(
-                label_image_output_port,
-                self.get_input_port(f"{camera_name}_label_image")
-            )
-    def detect_and_segment_objects(self, rgb_image: np.ndarray, camera_name: str):
-        pass
+        annotated_image = np.squeeze(color.label2rgb(label_image, bg_label=32766))
+        cv2.imwrite("ground_truth_annotated_image.jpg", 255*annotated_image)
+        # Create a boolean mask where True if the pixel matches any target index
+        mask = np.isin(label_image, target_indices)
+        if not np.any(mask):
+            return None, None
+        return mask, 1

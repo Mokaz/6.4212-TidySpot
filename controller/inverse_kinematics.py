@@ -24,7 +24,8 @@ def solve_ik(
     plant: MultibodyPlant,
     context: Context,
     X_WT: RigidTransform,
-    target_frame_name: str = "arm_link_fngr",
+    target_frame_name: str = "arm_link_wr1",
+    #target_frame_name: str = "arm_link_fngr",
     base_position: np.ndarray = np.zeros(3),
     fix_base: bool = True,
     rotation_bound: float = 0.01,
@@ -98,7 +99,9 @@ def solve_ik(
 
         result = Solve(ik.prog())
         if result.is_success():
+            print("IK successfully solved")
             return result.GetSolution(q)
     if error_on_fail:
+        print("could not be solved")
         raise AssertionError("IK failed :(")
     return None

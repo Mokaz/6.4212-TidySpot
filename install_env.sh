@@ -16,8 +16,13 @@ git submodule update --init --recursive
 cd grounded-sam-osx && bash install.sh
 
 # anygrasp
-cd third_party/anygrasp_sdk
-pip install graspnetAPI --no-deps
+cd third_party/MinkowskiEngine
+export MAX_JOBS=2
+python setup.py install --blas_include_dirs=${CONDA_PREFIX}/include --blas=openblas
+cd ../graspnetAPI
+pip install . # I had to change the setup.py file to remove a numpy version requirement
+cd ../anygrasp_sdk
+pip install -r requirements.txt # comment out graspnet in requirements.txt
 cd pointnet2
 python setup.py install
 cd ..

@@ -9,7 +9,6 @@ adapted by Matthew Trang (trangml) to allow for updating the grid and changing t
 See Wikipedia article (https://en.wikipedia.org/wiki/A*_search_algorithm)
 and PythonRobotics implementation (https://github.com/AtsushiSakai/PythonRobotics/blob/master/PathPlanning/AStar/a_star.py)
 """
-
 import math
 import numpy as np
 import matplotlib.pyplot as plt
@@ -32,7 +31,7 @@ from pydrake.all import (
     Rgba,
 )
 from enum import Enum, auto
-
+from scipy.ndimage import binary_dilation
 from utils import add_sphere_to_meshcat_xy_plane
 
 class NavigationState(Enum):
@@ -41,20 +40,20 @@ class NavigationState(Enum):
     MOVE_NEAR_OBJECT = auto()
 
 class Navigator(LeafSystem):
-    def __init__(self, station, builder, initial_position, resolution, robot_radius, time_step=0.1, meshcat=None, visualize=False):
+    def __init__(self, station, builder, initial_position, resolution, robot_length=1.3, robot_width=0.7, time_step=0.1, meshcat=None, visualize=False):
         """
         Initialize grid map for A* planning and smooth trajectory generation.
 
         initial_position: Initial position of the robot.
         resolution: Grid resolution.
-        robot_radius: Robot radius.
         time_step: Time step for trajectory updates (default: 0.1 seconds).
         meshcat: Instance of Meshcat for visualization.
         """
         LeafSystem.__init__(self)
         self._initial_position = initial_position
         self.resolution = resolution
-        self.robot_radius = robot_radius
+        self.robot_length = robot_length
+        self.robot_width = robot_width
         self.time_step = time_step  # Store the configurable time step
         self.meshcat = meshcat
         self.visualize = visualize
@@ -64,18 +63,18 @@ class Navigator(LeafSystem):
         self._current_position = self.DeclareDiscreteState(3)  # x, y, theta
         self._trajectory_flag = self.DeclareDiscreteState(1)  # Boolean flag for trajectory update
         self._navigation_complete = self.DeclareDiscreteState(1)  # Boolean flag for trajectory update
-        self._spot_commanded_state = self.DeclareDiscreteState(10)  # Vector of size 20
+        self._spot_commanded_position = self.DeclareDiscreteState(3)  # Vector of size 3
         self._previous_navigator_state = self.DeclareDiscreteState([0])  # Flag to ensure self.goal is set only once per mission. Initialize with 0 (False)
 
         # Input ports
         self._grid_map_input_index = self.DeclareAbstractInputPort("grid_map", AbstractValue.Make(np.zeros((100, 100)))).get_index()
         self._goal_input_index = self.DeclareVectorInputPort("goal", 3).get_index()
         self._current_position_input_index = self.DeclareVectorInputPort("current_position", 3).get_index()
-        self._navigator_state_input_index = self.DeclareVectorInputPort("navigator_state", 1).get_index() 
+        self._navigator_state_input_index = self.DeclareVectorInputPort("navigator_state", 1).get_index()
 
         # Output ports
         self.DeclareStateOutputPort("navigation_complete", self._navigation_complete)
-        self.DeclareVectorOutputPort("spot_commanded_state", 10, self.UpdateDesiredState)
+        self.DeclareVectorOutputPort("spot_commanded_position", 3, self.UpdateDesiredState)
 
         # Trajectory storage
         self.trajectory = None
@@ -87,17 +86,17 @@ class Navigator(LeafSystem):
         # Periodic update for trajectory generation
         self._state_update_event = self.DeclarePeriodicUnrestrictedUpdateEvent(self.time_step, 0.0, self.UpdateTrajectory)
 
-        # Initialize desired state
-        desired_position = np.array([0.0, 0.0, 0.0])
-        self.desired_arm_state = [0.0, -3.1, 3.1, 0.0, 0.0, 0.0, 0.0] # default stowed arm state
-        
-        self.spot_commanded_state = np.concatenate([desired_position, self.desired_arm_state])
+        # Initialize desired position
+        self.spot_commanded_position = np.array([0.0, 0.0, 0.0])
+        self.downsample = True
+        self.inflate_obstacles = True
+        self.allow_unknown_pathing = True
 
     def connect_mapper(self, point_cloud_mapper, station: Diagram, builder: DiagramBuilder):
         builder.Connect(point_cloud_mapper.get_output_port(0), self.get_input_port(self._grid_map_input_index)) # Output grid_map from mapper to input grid_map of planner
 
     def UpdateDesiredState(self, context: Context, output):
-        output.SetFromVector(self.spot_commanded_state)
+        output.SetFromVector(self.spot_commanded_position)
 
     def UpdateTrajectory(self, context: Context, state):
         """Generate or update the trajectory based on the FSM flag and goal."""
@@ -144,6 +143,13 @@ class Navigator(LeafSystem):
                 self.grid_size = grid_map.shape
                 self.grid_center_index = self.grid_size[0] // 2
 
+                if self.inflate_obstacles:
+                    if self.allow_unknown_pathing:
+                        grid_map = np.where(grid_map == -1, 0, grid_map)  # Replace -1 with 0
+
+                    # Inflate obstacles in the grid map
+                    grid_map = binary_dilation(grid_map, iterations=4) # the robot is 1.1m long and 0.5m wide, if we do 2 iterations, obstacles expand to 0.4 around. hopefully this is enough
+
                 # Use A* to find the path
                 rx, ry = self.planning(current_position, self.goal, grid_map)
 
@@ -151,28 +157,32 @@ class Navigator(LeafSystem):
                     # when the segments are too small, the robot movement is not smooth
                     # Downsample the path to create larger segments
                     # Take every Nth point to achieve roughly 1m segments
-                    desired_segment_length = 0.5  # 1 meter segments
-                    points = np.vstack((rx[::-1], ry[::-1])).T  # Reverse path and combine x,y
+                    if self.downsample:
+                        desired_segment_length = 0.3  # 1 meter segments
+                        points = np.vstack((rx[::-1], ry[::-1])).T  # Reverse path and combine x,y
 
-                    # Calculate cumulative distances
-                    diffs = np.diff(points, axis=0)
-                    segment_lengths = np.sqrt(np.sum(diffs**2, axis=1))
-                    cumulative_dist = np.cumsum(segment_lengths)
+                        # Calculate cumulative distances
+                        diffs = np.diff(points, axis=0)
+                        segment_lengths = np.sqrt(np.sum(diffs**2, axis=1))
+                        cumulative_dist = np.cumsum(segment_lengths)
 
-                    # Select points that are approximately desired_segment_length apart
-                    total_dist = cumulative_dist[-1]
-                    num_segments = max(2, int(total_dist / desired_segment_length))
-                    desired_distances = np.linspace(0, total_dist, num_segments)
+                        # Select points that are approximately desired_segment_length apart
+                        total_dist = cumulative_dist[-1]
+                        num_segments = max(2, int(total_dist / desired_segment_length))
+                        desired_distances = np.linspace(0, total_dist, num_segments)
 
-                    # Find indices of points closest to desired distances
-                    indices = [0]  # Always include start point
-                    for dist in desired_distances[1:-1]:
-                        idx = np.argmin(np.abs(cumulative_dist - dist))
-                        indices.append(idx + 1)  # +1 because cumulative_dist is one shorter than points
-                    indices.append(len(points) - 1)  # Always include end point
+                        # Find indices of points closest to desired distances
+                        indices = [0]  # Always include start point
+                        for dist in desired_distances[1:-1]:
+                            idx = np.argmin(np.abs(cumulative_dist - dist))
+                            indices.append(idx + 1)  # +1 because cumulative_dist is one shorter than points
+                        indices.append(len(points) - 1)  # Always include end point
 
-                    # Create waypoints with heading angles
-                    selected_points = points[indices]
+                        # Create waypoints with heading angles
+                        selected_points = points[indices]
+                    else:
+                        selected_points = np.vstack((rx[::-1], ry[::-1])).T  # Reverse path and combine x,y
+                        indices = range(len(rx))
                     headings = np.zeros(len(selected_points))
 
                     # Calculate heading angles to face next waypoint
@@ -188,17 +198,13 @@ class Navigator(LeafSystem):
                     else:
                         headings[-1] = self.goal[2]  # Use the goal's heading
 
-                    # Calculate times based on 1 m/s desired speed
-                    distances = np.sqrt(np.sum(np.diff(selected_points, axis=0)**2, axis=1))
-                    times = np.concatenate(([0], np.cumsum(distances)))  # Time = distance when speed = 1 m/s
-
                     # Combine positions and headings into waypoints
                     self.waypoints = np.column_stack((selected_points, headings))
                     self.current_waypoint_idx = 0
                     desired_position = self.waypoints[self.current_waypoint_idx]
 
-                    # Snap goal to gridmap point
-                    self.goal[:2] = self.waypoints[-1][:2]
+                    # # Snap goal to gridmap point
+                    # self.goal[:2] = self.waypoints[-1][:2]
 
                     # print(f"New waypoints set len {len(self.waypoints)}, first desired_position:", desired_position)
 
@@ -220,7 +226,7 @@ class Navigator(LeafSystem):
                             self.meshcat.SetObject(
                                 f"planned_path/point_{i}",
                                 Sphere(radius=0.01),
-                                Rgba(1, 0, 0, 1) 
+                                Rgba(1, 0, 0, 1)
                             )
                             self.meshcat.SetTransform(
                                 f"planned_path/point_{i}",
@@ -262,13 +268,13 @@ class Navigator(LeafSystem):
 
         # print("Desired position: ({:.3f}, {:.3f}, {:.3f})".format(*desired_position))
 
-        self.spot_commanded_state = np.concatenate([desired_position, self.desired_arm_state])
+        self.spot_commanded_position = np.array(desired_position)
 
-        if np.any(np.isnan(self.spot_commanded_state)):
-            print("Warning: spot_commanded_state contains NaN values. Resetting to current position.")
-            self.spot_commanded_state = np.concatenate([current_position[:3], self.desired_arm_state])
+        if np.any(np.isnan(self.spot_commanded_position)):
+            print("Warning: spot_commanded_position contains NaN values. Resetting to current position.")
+            self.spot_commanded_position = np.array(current_position[:3])
 
-        state.get_mutable_discrete_state(self._spot_commanded_state).SetFromVector(self.spot_commanded_state)
+        state.get_mutable_discrete_state(self._spot_commanded_position).SetFromVector(self.spot_commanded_position)
         state.get_mutable_discrete_state(self._previous_navigator_state).set_value([navigator_state])
 
 
@@ -355,6 +361,28 @@ class Navigator(LeafSystem):
         if node.x < 0 or node.y < 0 or node.x >= grid_map.shape[1] or node.y >= grid_map.shape[0]:
             return False
         return grid_map[node.x, node.y] == 0 or grid_map[node.x, node.y] == -1
+
+    def is_point_in_obstacle(self, point, grid_map):
+        """
+        Check if a given point lies within an obstacle or its expanded boundary in the grid_map.
+        """
+        x_index = self.calc_xy_index(point[0], grid_map.shape[1] // 2)
+        y_index = self.calc_xy_index(point[1], grid_map.shape[0] // 2)
+
+        if x_index < 0 or y_index < 0 or x_index >= grid_map.shape[1] or y_index >= grid_map.shape[0]:
+            return True
+        return grid_map[y_index, x_index] != 0
+
+    def is_path_segment_in_obstacle(self, point1, point2, grid_map):
+        """
+        Check if the line segment between two points intersects with any obstacles in the grid_map.
+        """
+        num_samples = int(np.ceil(np.linalg.norm(point2 - point1) / self.resolution))
+        for t in np.linspace(0, 1, num_samples):
+            intermediate_point = (1 - t) * point1 + t * point2
+            if self.is_point_in_obstacle(intermediate_point, grid_map):
+                return True
+        return False
 
     @staticmethod
     def get_motion_model():

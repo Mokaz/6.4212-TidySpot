@@ -10,6 +10,7 @@ from pydrake.all import (
     Diagram,
     PointCloud,
     DepthImageToPointCloud,
+    RigidTransform,
 )
 from typing import List, Tuple
 import matplotlib.pyplot as plt
@@ -22,8 +23,8 @@ import cv2
 import numpy as np
 
 class ObjectDetector(LeafSystem):
-    def __init__(self, station: Diagram, camera_names: List[str], image_size: Tuple[int, int], 
-                 use_groundedsam: bool, groundedsam_path: str = os.path.join(os.getcwd(), "third_party/Grounded-Segment-Anything"), 
+    def __init__(self, station: Diagram, camera_names: List[str], image_size: Tuple[int, int],
+                 use_groundedsam: bool, groundedsam_path: str = os.path.join(os.getcwd(), "third_party/Grounded-Segment-Anything"),
                  device: str = "cpu"):
         LeafSystem.__init__(self)
 
@@ -33,7 +34,7 @@ class ObjectDetector(LeafSystem):
         else:
             # if we aren't using GroundedSAM, then we're using groundtruth
             from perception.GroundTruthSensor import GroundTruthSensor
-            self.perceptor = GroundTruthSensor()
+            self.perceptor = GroundTruthSensor(station)
 
         self._camera_names = camera_names
 
@@ -53,7 +54,7 @@ class ObjectDetector(LeafSystem):
                 for image_type, image_class in {
                     'rgb_image': ImageRgba8U,
                     'depth_image': ImageDepth32F,
-                    'label_image': ImageLabel16I
+                    'label_image': ImageLabel16I,
                 }.items()
             }
             for camera_name in camera_names
@@ -61,28 +62,45 @@ class ObjectDetector(LeafSystem):
 
         # Output ports
         self.DeclareAbstractOutputPort(
-            "segmentation_data",
-            lambda: AbstractValue.Make({
-                "segmentation_mask": np.array([]),
-                "camera_name": ""
-            }),
+            "object_detection_segmentations",
+            lambda: AbstractValue.Make(dict()),
+            self.SegmentAllCameras
+        )
+
+        self.DeclareAbstractOutputPort(
+            "grasping_object_segmentation",
+            lambda: AbstractValue.Make(dict()),
             self.SegmentFrontCameras
         )
 
-        # self.DeclarePeriodicUnrestrictedUpdateEvent(3.0, 0.0, self.Update)
-
-    def Update(self, context, state):
+    def SegmentAllCameras(self, context: Context, output):
+        # print("ObjectDetector: SegmentAllCameras")
+        segmentation_mask_dict = {}
         for camera_name in self._camera_names:
+            if camera_name == "back":  # Skip back camera because of obscured view
+                continue
             rgb_image = cv2.cvtColor(self.get_color_image(camera_name, context).data, cv2.COLOR_RGBA2RGB)
-            mask, confidence = self.perceptor.detect_and_segment_objects(rgb_image, camera_name)
+            label_image = self.get_label_image(camera_name, context).data
+            mask, confidence = self.perceptor.detect_and_segment_objects(rgb_image, camera_name, label_image)
+            if mask is not None:
+                segmentation_mask_dict[camera_name] = mask
+        # if segmentation_mask_dict:
+        #     print(f"Detected {len(segmentation_mask_dict)} objects! Sending masks to PointCloudCropper")
+        # else: 
+        #     print("No objects detected")
+        output.set_value(segmentation_mask_dict)
+        # print("ObjectDetector: SegmentAllCameras complete)
 
-    def SegmentFrontCameras(self, context: Context, output):
+    def SegmentFrontCameras(self, context: Context, output): # For grasp selection
         # print("ObjectDetector: SegmentFrontCameras")
+        segmentation_mask_dict = {}
+
         frontleft_rgb_image = cv2.cvtColor(self.get_color_image("frontleft", context).data, cv2.COLOR_RGBA2RGB)
         frontright_rgb_image = cv2.cvtColor(self.get_color_image("frontright", context).data, cv2.COLOR_RGBA2RGB)
-
-        front_left_mask, front_left_confidence = self.perceptor.detect_and_segment_objects(frontleft_rgb_image, "frontleft")
-        front_right_mask, front_right_confidence = self.perceptor.detect_and_segment_objects(frontright_rgb_image, "frontright")
+        frontleft_label_image = self.get_label_image("frontleft", context).data
+        frontright_label_image = self.get_label_image("frontright", context).data
+        front_left_mask, front_left_confidence = self.perceptor.detect_and_segment_objects(frontleft_rgb_image, "frontleft", frontleft_label_image)
+        front_right_mask, front_right_confidence = self.perceptor.detect_and_segment_objects(frontright_rgb_image, "frontright", frontright_label_image)
 
         masks_confidences = [
             (front_left_mask, front_left_confidence, "frontleft"),
@@ -96,14 +114,14 @@ class ObjectDetector(LeafSystem):
             # Select the mask with the highest confidence
             # print("Detected object! Sending mask to PointCloudCropper")
             segmentation_mask, _, camera_name = max(valid_masks, key=lambda x: x[1])
-        else:
-            segmentation_mask = np.array([])
-            camera_name = ""
+            segmentation_mask_dict[camera_name] = segmentation_mask
+        
+        # if segmentation_mask_dict:
+        #     print("Object to grasp detected! Sending mask to PointCloudCropper")
+        # else:
+        #     print("No objects detected")
 
-        output.set_value({
-            "segmentation_mask": segmentation_mask,
-            "camera_name": camera_name
-        })
+        output.set_value(segmentation_mask_dict)
 
         # print("ObjectDetector: GetClosestObjectSegmentation complete")
 

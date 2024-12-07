@@ -35,7 +35,8 @@ class GroundedSAM:
         sam.to(device=self.DEVICE)
         self.sam_predictor = SamPredictor(sam)
 
-    def detect_and_segment_objects(self, rgb_image: np.ndarray, camera_name: str):
+    def detect_and_segment_objects(self, rgb_image: np.ndarray, camera_name: str, label_image: np.ndarray):
+        # label image is unused here
         # CLASSES = [
         #     "chips can", "master chef can", "cracker box", "sugar box", "tomato soup can", "mustard bottle",
         #     "tuna fish can", "pudding box", "gelatin box", "potted meat can", "banana", "strawberry", "apple",
