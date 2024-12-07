@@ -13,15 +13,23 @@ from pydrake.all import (
 )
 from typing import List, Tuple, Dict
 from scipy.ndimage import label
+from utils import (
+    add_sphere_to_meshcat_xy_plane,
+    convert_to_grid_coordinates,
+    convert_to_world_coordinates,
+)
 
 ADD_DETECTIONS_TO_GRIDMAP = True
 VISUALIZE_GRID_MAP = False
 
+
 class PointCloudMapper(LeafSystem):
-    def __init__(self, station: Diagram, camera_names: List[str], point_clouds, resolution, robot_length=1.3, robot_width=0.7, height_threshold=0.1, meshcat=None):
+    def __init__(self, station: Diagram, camera_names: List[str], point_clouds, resolution, robot_length=1.3, robot_width=0.7, height_threshold=0.03, meshcat=None):
         LeafSystem.__init__(self)
         self._point_clouds = point_clouds
         self._camera_names = camera_names
+        # remove the back camera
+        self._camera_names.remove("back")
         self._cameras = {
             point_cloud_name: station.GetSubsystemByName(f"rgbd_sensor_{point_cloud_name}") for point_cloud_name in camera_names
         }
@@ -37,24 +45,26 @@ class PointCloudMapper(LeafSystem):
         # Output ports
         self.DeclareAbstractOutputPort("grid_map", lambda: AbstractValue.Make(np.full((100, 100), -1)), self.CalcGridMap)
         self.DeclareAbstractOutputPort("object_clusters", lambda: AbstractValue.Make({}), self.CalcObjectClusters)
+        self.DeclareVectorOutputPort("frontier", 2, self.CalcFrontier)
 
         self.resolution = resolution
         self.grid_map = np.full((100, 100), -1)  # Initialized with a fixed size grid map with unexplored (-1)
         self.height_threshold = height_threshold  # Threshold to differentiate between free space and obstacles
         self.object_clusters = {}  # Dictionary to hold obstacle clusters
-        self.robot_grid_pos = (0, 0)  # Initialize robot position in grid coordinates
+        self.robot_grid_pos = (50, 50)  # Initialize robot position in grid coordinates
         self.robot_theta = 0  # Initialize robot orientation
         self.robot_length = robot_length
         self.robot_width = robot_width
+        self.frontier_strategy = "closest"
+        self.mark_robot_footprint_as_free()
 
     def CalcObjectClusters(self, context: Context, output: AbstractValue):
         # Set the output to the current object clusters
         output.set_value(self.object_clusters)
 
     def CalcGridMap(self, context: Context, output: AbstractValue):
-        # Reset grid map to unexplored at the start of each update
         self.robot_state = self.GetInputPort("spot.state_estimated").Eval(context)
-        self.robot_grid_pos = self.convert_to_grid_coordinates(self.robot_state[0], self.robot_state[1]) # convert robot position to grid coordinates
+        self.robot_grid_pos = convert_to_grid_coordinates(self.robot_state[0], self.robot_state[1], self.resolution, self.grid_map.shape) # convert robot position to grid coordinates
         self.robot_theta = self.robot_state[2] # get robot orientation
 
         # Process regular point clouds to mark obstacles
@@ -76,13 +86,30 @@ class PointCloudMapper(LeafSystem):
             ox, oy = self.object_pointcloud_to_grid(valid_object_points)  # Convert to grid (objects only)
             self.grid_map = self.update_grid_map(self.grid_map, ox, oy, [], [], value=2)  # Mark objects with value 2
 
-        self.mark_robot_footprint_as_free()
         if VISUALIZE_GRID_MAP:
             self.visualize_grid_map()  # Visualize the grid map
         self.cluster_objects()  # Cluster objects in the grid map
         # print(f"Object clusters: {self.object_clusters}")
 
         output.set_value(self.grid_map)
+
+    def CalcFrontier(self, context: Context, output):
+        # Set the output to the current object clusters
+        frontiers = self.find_unexplored_frontiers()
+        frontiers = self.cluster_frontiers(frontiers)
+        if len(frontiers) == 0:
+            output.SetFromVector([0, 0])
+            return
+        else:
+            if self.frontier_strategy == "random":
+                frontier = self.pick_random_frontier(frontiers)
+            else:
+                frontier = self.pick_closest_frontier(frontiers)
+        if frontier is None:
+            output.SetFromVector([0, 0])
+            return
+        frontier_w = convert_to_world_coordinates(frontier[0], frontier[1], self.resolution, self.grid_map.shape)
+        output.SetFromVector(frontier_w)
 
     def connect_components(self, point_cloud_cropper, station: Diagram, builder: DiagramBuilder):
         for camera_name in self._camera_names:
@@ -101,17 +128,7 @@ class PointCloudMapper(LeafSystem):
             self.GetInputPort("spot.state_estimated"),
         )
 
-    def convert_to_grid_coordinates(self, x: float, y: float) -> Tuple[int, int]:
-        """
-        Converts a world coordinate to grid coordinates.
 
-        x, y: World coordinates
-        Returns:
-            ix, iy: Grid coordinates
-        """
-        ix = int(round(x / self.resolution)) + (self.grid_map.shape[0] // 2)
-        iy = int(round(y / self.resolution)) + (self.grid_map.shape[1] // 2)
-        return ix, iy
 
     def object_pointcloud_to_grid(self, point_cloud: np.ndarray) -> Tuple[List[int], List[int], List[int], List[int]]:
         """
@@ -127,7 +144,7 @@ class PointCloudMapper(LeafSystem):
 
         for i in range(point_cloud.shape[1]):
             x, y = point_cloud[0, i], point_cloud[1, i]
-            ix, iy = self.convert_to_grid_coordinates(x, y)
+            ix, iy = convert_to_grid_coordinates(x, y, self.resolution, self.grid_map.shape)
             ox.append(ix)
             oy.append(iy)
 
@@ -151,13 +168,13 @@ class PointCloudMapper(LeafSystem):
 
         for i in range(obstacle_points.shape[1]):
             x, y = obstacle_points[0, i], obstacle_points[1, i]
-            ix, iy = self.convert_to_grid_coordinates(x, y)
+            ix, iy = convert_to_grid_coordinates(x, y, self.resolution, self.grid_map.shape)
             ox.append(ix)
             oy.append(iy)
 
         for i in range(free_points.shape[1]):
             x, y = free_points[0, i], free_points[1, i]
-            ix, iy = self.convert_to_grid_coordinates(x, y)
+            ix, iy = convert_to_grid_coordinates(x, y, self.resolution, self.grid_map.shape)
             free_ox.append(ix)
             free_oy.append(iy)
 
@@ -188,7 +205,7 @@ class PointCloudMapper(LeafSystem):
         """
         Marks the grid cells corresponding to the robot's footprint as free space.
         """
-        center_x, center_y = self.convert_to_grid_coordinates(self.robot_state[0], self.robot_state[1])
+        center_x, center_y = self.robot_grid_pos
         half_length_cells = int(self.robot_length / (2 * self.resolution))
         half_width_cells = int(self.robot_width / (2 * self.resolution))
 
@@ -235,6 +252,84 @@ class PointCloudMapper(LeafSystem):
                     "world": (centroid_x, centroid_y)
                 }
             }
+
+    def find_unexplored_frontiers(self) -> List[Tuple[int, int]]:
+        """
+        Finds unexplored frontier cells in the grid map. A frontier cell is a free cell that is adjacent to at least one unexplored cell.
+
+        Returns:
+            List of tuples representing the grid coordinates of frontier cells.
+        """
+        frontiers = []
+        rows, cols = self.grid_map.shape
+
+        for x in range(1, rows - 1):
+            for y in range(1, cols - 1):
+                if self.grid_map[x, y] == 0:  # Free space
+                    neighbors = [
+                        self.grid_map[x - 1, y],  # Up
+                        self.grid_map[x + 1, y],  # Down
+                        self.grid_map[x, y - 1],  # Left
+                        self.grid_map[x, y + 1]   # Right
+                    ]
+                    if -1 in neighbors and 1 not in neighbors:  # Check for unexplored neighbor and not next to obstacle
+                        frontiers.append((x, y))
+        return frontiers
+
+    def cluster_frontiers(self, frontiers: List[Tuple[int, int]]) -> List[Tuple[int, int]]:
+        """
+        Clusters frontier cells and returns the central points of each cluster, discarding clusters that are too small.
+
+        frontiers: List of frontier cells (grid coordinates).
+        Returns:
+            List of tuples representing the central points of each cluster.
+        """
+        frontier_grid = np.zeros_like(self.grid_map, dtype=int)
+
+        # Mark frontier cells in a separate grid
+        for x, y in frontiers:
+            frontier_grid[x, y] = 1
+
+        # Label connected components of frontier cells
+        labeled_grid, num_features = label(frontier_grid)
+
+        central_points = []
+        for i in range(1, num_features + 1):
+            cluster_indices = np.argwhere(labeled_grid == i)
+
+            # Discard clusters that are too small
+            if len(cluster_indices) < 5:  # Adjust the threshold as needed
+                continue
+
+            # Calculate the centroid
+            centroid_index = len(cluster_indices) // 2
+            central_point = tuple(cluster_indices[centroid_index])
+            central_points.append(central_point)
+
+        return central_points
+
+    def pick_closest_frontier(self, frontiers: List[Tuple[int, int]]) -> Tuple[int, int]:
+        """
+        Picks the closest frontier cell to the robot's current position.
+
+        frontiers: List of tuples representing the grid coordinates of frontier cells.
+        Returns:
+            Tuple representing the grid coordinates of the closest frontier cell.
+        """
+        # has to be at least a meter away
+        min_dist = float('inf')
+        closest_frontier = None
+        for frontier in frontiers:
+            dist = math.sqrt((frontier[0] - self.robot_grid_pos[0]) ** 2 + (frontier[1] - self.robot_grid_pos[1]) ** 2)
+            if dist < min_dist and dist > 10:
+                min_dist = dist
+                closest_frontier = frontier
+
+        return closest_frontier
+
+    def pick_random_frontier(self, frontiers: List[Tuple[int, int]]) -> Tuple[int, int]:
+        random_frontier = frontiers[np.random.randint(0, len(frontiers))]
+        return random_frontier
 
     def visualize_grid_map(self):
         """

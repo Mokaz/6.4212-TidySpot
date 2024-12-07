@@ -41,7 +41,7 @@ class TidySpotFSM(LeafSystem):
         # Input ports for various components
         self.DeclareVectorInputPort("object_detected", 1)
         self.DeclareVectorInputPort("navigation_complete", 1)
-
+        self.DeclareVectorInputPort("frontier", 2)
         self.DeclareVectorInputPort("grasp_complete", 1) # TODO: Add success/fail flag to data sent to this port
 
         # Output ports
@@ -74,6 +74,8 @@ class TidySpotFSM(LeafSystem):
 
         # Connect the detection dict to the FSM planner
         builder.Connect(point_cloud_mapper.GetOutputPort("object_clusters"), self._object_clusters_input) # TODO: Check that output name is correct
+        # connect the mappers frontier to the FSM
+        builder.Connect(point_cloud_mapper.GetOutputPort("frontier"), self.GetInputPort("frontier"))
 
         # Connect the grasper to the FSM planner
         builder.Connect(self.GetOutputPort("grasp_requested"), grasper.GetInputPort("do_grasp"))
@@ -101,14 +103,15 @@ class TidySpotFSM(LeafSystem):
         self.robot_state = self.get_spot_state_input_port().Eval(context)
         self.object_clusters = self._object_clusters_input.Eval(context)
         current_time = context.get_time()
-        times = context.get_abstract_state(int(self._times_index)).get_value()
-
         if current_state == SpotState.IDLE:
             state.get_mutable_discrete_state(self.navigator_state_commanded).set_value([NavigationState.STOP.value])
 
             # select a new area to explore and go to it
-            self.set_new_random_exploration_goal()
-            # self.set_new_exploration_goal((0, 1, None))
+            if current_time == 0.0:
+                # At time 0, we explore our start location to get a good map
+                self.set_new_exploration_goal((0, 0, None))
+            else:
+                self.set_new_random_exploration_goal(context)
 
             print("State: IDLE -> EXPLORE")
             state.get_mutable_abstract_state(
@@ -226,9 +229,14 @@ class TidySpotFSM(LeafSystem):
         # Actual deposit code here
         pass
 
-    def set_new_random_exploration_goal(self):
+    def set_new_random_exploration_goal(self, context):
         # Random search
-        new_goal = (random.uniform(-4.0, 4.0), random.uniform(-4.0, 4.0))
+        new_goal = self.GetInputPort("frontier").Eval(context)
+        if new_goal is None:
+            new_goal = (random.uniform(-4.0, 4.0), random.uniform(-4.0, 4.0))
+
+        # clip the goal to slightly inside the bounds
+        new_goal = (np.clip(new_goal[0], -4.5, 4.5), np.clip(new_goal[1], -4.5, 4.5))
 
         print(f"Exploring environment, new exploration goal: {new_goal}")
 

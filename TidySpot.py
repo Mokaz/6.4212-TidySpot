@@ -214,7 +214,7 @@ def run_TidySpot(args):
         meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 
         meshcat.StartRecording()
-        simulator.AdvanceTo(10.0)
+        simulator.AdvanceTo(60.0)
 
         ################
         ### TESTZONE ###

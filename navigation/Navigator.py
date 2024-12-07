@@ -32,7 +32,11 @@ from pydrake.all import (
 )
 from enum import Enum, auto
 from scipy.ndimage import binary_dilation
-from utils import add_sphere_to_meshcat_xy_plane
+from utils import (
+    add_sphere_to_meshcat_xy_plane,
+    convert_to_grid_coordinates,
+    convert_to_world_coordinates,
+)
 
 class NavigationState(Enum):
     STOP = 0
@@ -94,12 +98,26 @@ class Navigator(LeafSystem):
         self.inflate_obstacles = True
         self.allow_unknown_pathing = True
         self.goal_object_location = None
+        self.grid_map = np.zeros((100, 100))
 
     def connect_mapper(self, point_cloud_mapper, station: Diagram, builder: DiagramBuilder):
         builder.Connect(point_cloud_mapper.get_output_port(0), self.get_input_port(self._grid_map_input_index)) # Output grid_map from mapper to input grid_map of planner
 
     def UpdateDesiredState(self, context: Context, output):
         output.SetFromVector(self.spot_commanded_position)
+
+    def check_unoccupied(self, position, grid_map):
+        ix, iy = convert_to_grid_coordinates(position[0], position[1], self.resolution, grid_map.shape)
+        if grid_map[ix, iy] == 0 or grid_map[ix, iy] == -1:
+            return position
+        else:
+            # print("Position is occupied. Finding nearest unoccupied position.")
+            # Find nearest unoccupied position
+            for i in range(1, 10):
+                for j in range(-i, i+1):
+                    for k in range(-i, i+1):
+                        if grid_map[ix+j, iy+k] == 0:
+                            return convert_to_world_coordinates(ix+j, iy+k, self.resolution, grid_map.shape)
 
     def UpdateTrajectory(self, context: Context, state):
         """Generate or update the trajectory based on the FSM flag and goal."""
@@ -132,6 +150,7 @@ class Navigator(LeafSystem):
                     distance_to_goal = np.linalg.norm(direction_vector)
                     if distance_to_goal > approach_distance:
                         adjusted_goal_position = current_position[:2] + (direction_vector / distance_to_goal) * (distance_to_goal - approach_distance)
+                        adjusted_goal_position = self.check_unoccupied(adjusted_goal_position, self.grid_map)
                         # calculate the heading between the adjusted goal position and the original goal position
                         # This way we ensure we rotate towards the original goal position
                         self.goal[2] = np.arctan2(self.goal[1] - adjusted_goal_position[1], self.goal[0] - adjusted_goal_position[0])
@@ -147,13 +166,18 @@ class Navigator(LeafSystem):
                 self.iters_at_current_waypoint += 1
                 current_waypoint = self.waypoints[self.current_waypoint_idx]
 
+                # if we are about a meter away from the last waypoint, update the map
+                if self.current_waypoint_idx == len(self.waypoints) - 10:
+                    self.grid_map = self.EvalAbstractInput(context, self._grid_map_input_index).get_value()
+
                 # Check if we've reached the current waypoint
                 distance_to_waypoint = np.linalg.norm(current_waypoint[:2] - current_position[:2])
                 # if we are at the last waypoint, make sure we also match the heading and have more precision on the last point
                 angle_okay = True # we don't really care about angle unless its the last point
-                threshold = 0.3
+                threshold = 0.4
                 # iteratively check nodes, since we might satisfy multiple conditions of sequential nodes
                 while distance_to_waypoint < threshold and angle_okay:  # 10cm threshold
+
                     if self.current_waypoint_idx == len(self.waypoints) - 1:
                         angle_okay = abs(current_position[2] - current_waypoint[2]) < 0.2 # about 10 degrees
                         threshold = 0.15
@@ -173,6 +197,7 @@ class Navigator(LeafSystem):
                     else:
                         current_waypoint = self.waypoints[self.current_waypoint_idx]
                         distance_to_waypoint = np.linalg.norm(current_waypoint[:2] - current_position[:2])
+                        # update the map
 
                 # Follow existing trajectory
                 desired_position = current_waypoint
@@ -181,18 +206,20 @@ class Navigator(LeafSystem):
                 self.iters_at_current_waypoint = 0
                 # print("Generating new A* path to:", self.goal)
                 # Calculate new A* path
-                grid_map = self.EvalAbstractInput(context, self._grid_map_input_index).get_value()
-                self.grid_size = grid_map.shape
+
+                self.grid_map = self.EvalAbstractInput(context, self._grid_map_input_index).get_value()
+                self.grid_size = self.grid_map.shape
                 self.grid_center_index = self.grid_size[0] // 2
 
                 if self.inflate_obstacles:
                     if self.allow_unknown_pathing:
-                        grid_map = np.where(grid_map == -1, 0, grid_map)  # Replace -1 with 0
+                        grid_map = np.where(self.grid_map == -1, 0, self.grid_map)  # Replace -1 with 0
 
                     # Inflate obstacles in the grid map
                     grid_map = binary_dilation(grid_map, iterations=4) # the robot is 1.1m long and 0.5m wide, if we do 2 iterations, obstacles expand to 0.4 around. hopefully this is enough
 
                 # Use A* to find the path
+                self.goal[:2] = self.check_unoccupied(self.goal[:2], self.grid_map)
                 rx, ry = self.planning(current_position, self.goal, grid_map)
 
                 if len(rx) > 1:
