@@ -22,7 +22,7 @@ from navigation.PointCloudMapper import PointCloudMapper
 from navigation.Navigator import Navigator
 from controller.spot_controller import SpotController
 
-from utils import *
+from utils.utils import *
 from perception.ObjectDetector import ObjectDetector
 from grasping.GraspSelector import GraspSelector
 from grasping.PointCloudCropper import PointCloudCropper

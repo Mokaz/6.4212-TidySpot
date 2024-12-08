@@ -13,7 +13,7 @@ from pydrake.all import (
 )
 from typing import List, Tuple, Dict
 from scipy.ndimage import label
-from utils import (
+from utils.utils import (
     add_sphere_to_meshcat_xy_plane,
     convert_to_grid_coordinates,
     convert_to_world_coordinates,
@@ -28,8 +28,6 @@ class PointCloudMapper(LeafSystem):
         LeafSystem.__init__(self)
         self._point_clouds = point_clouds
         self._camera_names = camera_names
-        # remove the back camera
-        self._camera_names.remove("back")
         self._cameras = {
             point_cloud_name: station.GetSubsystemByName(f"rgbd_sensor_{point_cloud_name}") for point_cloud_name in camera_names
         }

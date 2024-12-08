@@ -9,7 +9,7 @@ from manipulation import FindResource, running_as_notebook
 from manipulation.station import (
     AppendDirectives,
     LoadScenario,
-    MakeHardwareStation,
+    # MakeHardwareStation,
 )
 
 from TidySpotFSM import TidySpotFSM
@@ -19,10 +19,15 @@ from navigation.Navigator import Navigator
 from controller.PositionCombiner import PositionCombiner
 from controller.SpotArmIKController import SpotArmIKController
 
-from utils import *
+from utils.utils import *
+# from station import MakeHardwareStation
+from utils.tidyspotHardwareStation import MakeHardwareStation
+
 from perception.ObjectDetector import ObjectDetector
 from grasping.GraspSelector import GraspSelector
 from grasping.PointCloudCropper import PointCloudCropper
+
+from manipulation.meshcat_utils import AddMeshcatTriad
 
 import os
 import sys
@@ -49,10 +54,10 @@ def run_TidySpot(args):
     device = args.device
     scenario_path = args.scenario
 
-    # use_anygrasp = True
-    # use_grounded_sam = True
-    # device = "cuda"
-    # scenario_path = "objects/simple_cracker_box_detection_test.yaml"
+    use_anygrasp = True
+    use_grounded_sam = True
+    device = "cuda"
+    scenario_path = "objects/simple_cracker_box_infront_grasp.yaml"
 
     try:
         ### Start the visualizer ###
@@ -71,7 +76,8 @@ def run_TidySpot(args):
         # Enable depth images for all cameras and collect camera names (BUG: False by default?)
         for camera_name, camera_config in scenario.cameras.items():
             camera_config.depth = True
-            camera_names.append(camera_name)
+            if camera_name != "hand" and camera_name != "back":
+                camera_names.append(camera_name)
 
             if image_size is None:
                 image_size = (camera_config.width, camera_config.height)
@@ -85,6 +91,7 @@ def run_TidySpot(args):
         station = builder.AddSystem(MakeHardwareStation(
             scenario=scenario,
             meshcat=meshcat,
+            # parser_preload_callback=lambda parser: parser.package_map().AddPackageXml("robots/spot_description/package.xml")
             parser_preload_callback=lambda parser: parser.package_map().PopulateFromFolder(os.getcwd())
         ))
 
@@ -128,7 +135,7 @@ def run_TidySpot(args):
 
         # Add IK controller for to solve arm positions for grasping
         spot_plant = station.GetSubsystemByName("spot.controller").get_multibody_plant_for_control()
-        spot_arm_ik_controller = builder.AddSystem(SpotArmIKController(spot_plant))
+        spot_arm_ik_controller = builder.AddSystem(SpotArmIKController(plant, spot_plant, meshcat=meshcat))
         spot_arm_ik_controller.set_name("spot_arm_ik_controller")
         spot_arm_ik_controller.connect_components(builder, station, navigator, grasp_selector)
 
@@ -142,7 +149,7 @@ def run_TidySpot(args):
         # Add Finite State Machine = TidySpotFSM
         tidy_spot_planner = builder.AddSystem(TidySpotFSM(plant, bin_location))
         tidy_spot_planner.set_name("tidy_spot_fsm")
-        tidy_spot_planner.connect_components(builder, spot_arm_ik_controller, point_cloud_mapper, navigator, station)
+        tidy_spot_planner.connect_components(builder, object_detector, spot_arm_ik_controller, point_cloud_mapper, navigator, station)
 
         # Last component, add state interpolator which converts desired state to desired state and velocity
         state_interpolator = builder.AddSystem(StateInterpolatorWithDiscreteDerivative(10, 0.1, suppress_initial_transient=True))
@@ -174,6 +181,8 @@ def run_TidySpot(args):
         plant_context = plant.GetMyMutableContextFromRoot(context)
         object_detector_context = object_detector.GetMyMutableContextFromRoot(context)
         # controller_context = controller.GetMyMutableContextFromRoot(context)
+
+        inverse_dynamics_controller = station.GetSubsystemByName("spot.controller")
 
         ### Set initial Spot state ###
         x0 = station.GetOutputPort("spot.state_estimated").Eval(station_context)
@@ -208,13 +217,31 @@ def run_TidySpot(args):
             print(f"Goal: {goal[:3]}")
             print("---")
 
+        q9_pid_output_history = []
+        times = []
+
+        def visualize_controller_poses_and_debug(context):
+            gripper_pose = plant.EvalBodyPoseInWorld(plant_context, plant.GetBodyByName("arm_link_fngr"))
+            AddMeshcatTriad(meshcat, "arm_link_fngr", length=0.1, radius=0.006, X_PT=gripper_pose)
+            if spot_arm_ik_controller.prepick_pose is not None:
+                AddMeshcatTriad(meshcat, "prepick_pose", length=0.1, radius=0.006, X_PT=spot_arm_ik_controller.prepick_pose)
+            if spot_arm_ik_controller.desired_gripper_pose is not None:
+                AddMeshcatTriad(meshcat, "desired_gripper_pose", length=0.1, radius=0.006, X_PT=spot_arm_ik_controller.desired_gripper_pose)
+
+            inverse_dynamics_controller_context = inverse_dynamics_controller.GetMyContextFromRoot(context)
+            pid_output = inverse_dynamics_controller.get_output_port(0).Eval(inverse_dynamics_controller_context)
+            # print(f"Time: {context.get_time():.2f}")
+            # print("PID output (torques):", pid_output)
+            q9_pid_output_history.append(pid_output[9])
+            times.append(context.get_time())
 
         # simulator.set_monitor(PrintStates)
+        simulator.set_monitor(visualize_controller_poses_and_debug)
 
         meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 
         meshcat.StartRecording()
-        simulator.AdvanceTo(60.0)
+        simulator.AdvanceTo(10)
 
         ################
         ### TESTZONE ###
@@ -248,6 +275,14 @@ def run_TidySpot(args):
 
         # # Keep meshcat alive
         meshcat.PublishRecording()
+
+        # plt.figure()
+        # plt.plot(times, q9_pid_output_history)
+        # plt.xlabel('Time [s]')
+        # plt.ylabel('q9_pid_output_history')
+        # plt.title('q9 Force Outputs Over Time')
+        # plt.grid(True)
+        # plt.show()
 
         while not meshcat.GetButtonClicks("Stop meshcat"):
             pass

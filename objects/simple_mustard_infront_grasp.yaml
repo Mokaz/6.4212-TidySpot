@@ -42,12 +42,12 @@ directives:
         translation: [0, -5.5, -0.047]
         rotation: !Rpy { deg: [0, 90, 90]}
 - add_model:
-    name: obj_cracker
-    file: package://manipulation/hydro/003_cracker_box.sdf
+    name: obj_mustard
+    file: package://manipulation/hydro/006_mustard_bottle.sdf
     default_free_body_pose:
-        base_link_cracker:
-            translation: [0, 3, 0.1]
-            rotation: !Rpy { deg: [90, 180, 0]}
+        base_link_mustard:
+            translation: [1, 0, 0.1]
+            rotation: !Rpy { deg: [0, 0, 90]}
 - add_model:
     name: planar_bin
     file: package://TidySpot_objects/bin.sdf

@@ -217,6 +217,8 @@ def AddPointClouds(
 
     return to_point_cloud
 
+
+
 def convert_to_grid_coordinates(x: float, y: float, resolution: float, shape: Tuple) -> Tuple[int, int]:
     """
     Converts a world coordinate to grid coordinates.

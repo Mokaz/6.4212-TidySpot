@@ -32,7 +32,7 @@ from pydrake.all import (
 )
 from enum import Enum, auto
 from scipy.ndimage import binary_dilation
-from utils import (
+from utils.utils import (
     add_sphere_to_meshcat_xy_plane,
     convert_to_grid_coordinates,
     convert_to_world_coordinates,
@@ -145,7 +145,7 @@ class Navigator(LeafSystem):
                     add_sphere_to_meshcat_xy_plane(self.meshcat, "goal_original", self.goal, radius=0.05, rgba=[0, 0, 1, 1])
 
                 if navigator_state == NavigationState.MOVE_NEAR_OBJECT.value:
-                    approach_distance = 1  # Distance to stop before the object (in meters)
+                    approach_distance = 0.85  # Distance to stop before the object (in meters)
                     direction_vector = self.goal[:2] - current_position[:2]
                     distance_to_goal = np.linalg.norm(direction_vector)
                     if distance_to_goal > approach_distance:
@@ -174,7 +174,7 @@ class Navigator(LeafSystem):
                 distance_to_waypoint = np.linalg.norm(current_waypoint[:2] - current_position[:2])
                 # if we are at the last waypoint, make sure we also match the heading and have more precision on the last point
                 angle_okay = True # we don't really care about angle unless its the last point
-                threshold = 0.4
+                threshold = 0.2
                 # iteratively check nodes, since we might satisfy multiple conditions of sequential nodes
                 while distance_to_waypoint < threshold and angle_okay:  # 10cm threshold
 

@@ -66,13 +66,12 @@ class GraspSelector(LeafSystem):
             print("ANYGRASP: No points in the specified limits.")
             return
 
-        if self.visualize:
-            self.meshcat.SetObject("cropped_point_cloud", point_cloud, point_size=0.01)
+        # if self.visualize:
+        #     self.meshcat.SetObject("cropped_point_cloud", point_cloud, point_size=0.01)
         #self.visualize_pcd_with_grasps(points, colors)
 
         if self._use_anygrasp:
-            gg_ten_best = self.grasp_handler.run_grasp(points, colors, lims=None, visualize=False) # TODO: Implement more filtering
-            g_best = gg_ten_best[0]
+            g_best = self.grasp_handler.run_grasp(points, colors, lims=None, visualize=False)
             g_best = RigidTransform(RotationMatrix(g_best.rotation_matrix).multiply(RotationMatrix.MakeXRotation(-np.pi/2)), g_best.translation)
             output.set_value(g_best)
         else: # Antipodal
@@ -80,7 +79,7 @@ class GraspSelector(LeafSystem):
             output.set_value(g_best)
 
         # visualize the best grasp
-        AddMeshcatTriad(self.meshcat, "best_grasp_pose", length=0.05, radius=0.01, X_PT=g_best)
+        # AddMeshcatTriad(self.meshcat, "best_grasp_pose", length=0.1, radius=0.005, X_PT=g_best)
 
     def visualize_pcd_with_grasps(self, points, colors=None, gg=None):
         import open3d as o3d
