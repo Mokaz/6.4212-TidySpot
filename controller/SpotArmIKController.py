@@ -124,7 +124,7 @@ class SpotArmIKController(LeafSystem):
         #         self._commanded_arm_position = np.append(self._commanded_arm_position[:6], [0.0])
         #     else:
         #         self._commanded_arm_position = np.append(self._commanded_arm_position[:6], [-1.0])
-        
+
         # return
 
 
@@ -160,13 +160,13 @@ class SpotArmIKController(LeafSystem):
         if controller_mission == ControllerMission.STOP:
             state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.IDLE)
             return
-        
+
         if controller_mission == ControllerMission.PICK:
             if controller_state == ControllerState.IDLE:
                 print("Solving IK to transition to REACHING_PREPICK")
                 self.desired_gripper_pose = self.desired_gripper_pose_input.Eval(context)
                 desired_gripper_pose_is_default = np.allclose(self.desired_gripper_pose.rotation().matrix(), np.eye(3)) and np.allclose(self.desired_gripper_pose.translation(), np.zeros(3))
-                
+
                 try:
                     if desired_gripper_pose_is_default:
                         print("Invalid desired gripper pose: It is the default pose.")
@@ -195,7 +195,7 @@ class SpotArmIKController(LeafSystem):
                 # print("Commanded Arm Position: ", self._commanded_arm_position)
                 # print("Difference: ", np.abs(curr_q - self._commanded_arm_position))
 
-                if np.allclose(curr_q, self._commanded_arm_position, atol=0.05) and np.allclose(curr_q_dot, np.zeros(7), atol=0.05):
+                if np.allclose(curr_q, self._commanded_arm_position, atol=0.1) and np.allclose(curr_q_dot, np.zeros(7), atol=0.1):
                     print("Yay! Reached the prepick pose.")
 
                     self.desired_gripper_pose = self.desired_gripper_pose @ RigidTransform(RotationMatrix.MakeYRotation(self.gripper_open_angle))
@@ -219,14 +219,14 @@ class SpotArmIKController(LeafSystem):
                     except AssertionError as e:
                         print(f"AssertionError caught: {e}")
 
-            if controller_state == ControllerState.REACHING_PICK:   
+            if controller_state == ControllerState.REACHING_PICK:
                 # if DEBUG and context.get_time() - self._last_print_time > 0.3:
                 # #     # print("Current Arm Position: ", np.round(curr_q, 4))
                 # #     # print("Commanded Arm Position: ", np.round(self._commanded_arm_position, 4))
                 # #     print("Difference: ", np.round(np.abs(curr_q - self._commanded_arm_position), 4))
                 #     self._last_print_time = context.get_time()
-                
-                if np.allclose(curr_q[:6], self._commanded_arm_position[:6], atol=0.05) and np.allclose(curr_q_dot, np.zeros(7), atol=0.05):
+
+                if np.allclose(curr_q[:6], self._commanded_arm_position[:6], atol=0.1) and np.allclose(curr_q_dot, np.zeros(7), atol=0.1):
                     print("Reached the PICK pose. Closing gripper")
                     print("CLOSING GRIPPER TIME: ", context.get_time())
 
@@ -246,14 +246,10 @@ class SpotArmIKController(LeafSystem):
                     # print("Difference: ", np.round(np.abs(curr_q - self._commanded_arm_position), 4))
                     self._last_print_time = context.get_time()
 
-                # relative_close_time_elapsed = (context.get_time() - self.gripper_close_start_time) / (self.gripper_close_duration)
-                # gripper_angle = np.interp(relative_close_time_elapsed, [0, 1], [self.gripper_open_angle, 0.0])
-                # self._commanded_arm_position[6] = gripper_angle
-                
-                if context.get_time() > self.gripper_close_end_time:
-                    print("Gripper closed. Returning to nominal arm pose.")
-                    self._commanded_arm_position = q_nominal_arm
-                    state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.RETURN_TO_NOMINAL_ARM)
+                # if context.get_time() - self.gripper_close_time > 1:
+                #     print("Gripper closed. Returning to nominal arm pose.")
+                #     self._commanded_arm_position = q_nominal_arm
+                #     state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.RETURN_TO_NOMINAL_ARM)
 
             if controller_state == ControllerState.RETURN_TO_NOMINAL_ARM:
                 if np.allclose(curr_q, q_nominal_arm, atol=0.03) and np.allclose(curr_q_dot, np.zeros(7), atol=0.03):
