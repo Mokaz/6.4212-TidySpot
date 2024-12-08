@@ -13,7 +13,7 @@ from pydrake.all import (
 )
 from typing import List, Tuple, Dict
 from scipy.ndimage import label
-from utils import (
+from utils.utils import (
     add_sphere_to_meshcat_xy_plane,
     convert_to_grid_coordinates,
     convert_to_world_coordinates,

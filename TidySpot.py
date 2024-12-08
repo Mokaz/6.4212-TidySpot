@@ -19,9 +19,9 @@ from navigation.Navigator import Navigator
 from controller.PositionCombiner import PositionCombiner
 from controller.SpotArmIKController import SpotArmIKController
 
-from utils import *
+from utils.utils import *
 # from station import MakeHardwareStation
-from tidyspot_hw_station.tidyspotHardwareStation import MakeHardwareStation
+from utils.tidyspotHardwareStation import MakeHardwareStation
 
 from perception.ObjectDetector import ObjectDetector
 from grasping.GraspSelector import GraspSelector
