@@ -54,10 +54,11 @@ def run_TidySpot(args):
     device = args.device
     scenario_path = args.scenario
 
+    # Parameter override for testing 
     use_anygrasp = True
-    use_grounded_sam = True
+    use_grounded_sam = False
     device = "cuda"
-    scenario_path = "objects/simple_cracker_box_infront_grasp.yaml"
+    scenario_path = "objects/added_object_directives.yaml"
 
     try:
         ### Start the visualizer ###
@@ -87,6 +88,7 @@ def run_TidySpot(args):
 
         # Get bin location from scenario (assuming bin link is welded to world)
         bin_location = get_bin_translation(scenario, bin_link_name="planar_bin::bin_base")
+        print(f"Bin location: {bin_location}")
 
         station = builder.AddSystem(MakeHardwareStation(
             scenario=scenario,
@@ -117,7 +119,7 @@ def run_TidySpot(args):
         # Instantiate GraspSelector with use_anygrasp
         grasp_selector = builder.AddSystem(GraspSelector(use_anygrasp, plant=plant, scene_graph=scene_graph, meshcat=meshcat))
         grasp_selector.set_name("grasp_selector")
-        grasp_selector.connect_ports(point_cloud_cropper, builder)
+        grasp_selector.connect_ports(station, point_cloud_cropper, builder)
 
         ### PLANNER ###
 
@@ -135,7 +137,7 @@ def run_TidySpot(args):
 
         # Add IK controller for to solve arm positions for grasping
         spot_plant = station.GetSubsystemByName("spot.controller").get_multibody_plant_for_control()
-        spot_arm_ik_controller = builder.AddSystem(SpotArmIKController(plant, spot_plant, meshcat=meshcat))
+        spot_arm_ik_controller = builder.AddSystem(SpotArmIKController(plant, spot_plant, bin_location, meshcat=meshcat))
         spot_arm_ik_controller.set_name("spot_arm_ik_controller")
         spot_arm_ik_controller.connect_components(builder, station, navigator, grasp_selector)
 
@@ -149,7 +151,7 @@ def run_TidySpot(args):
         # Add Finite State Machine = TidySpotFSM
         tidy_spot_planner = builder.AddSystem(TidySpotFSM(plant, bin_location))
         tidy_spot_planner.set_name("tidy_spot_fsm")
-        tidy_spot_planner.connect_components(builder, object_detector, spot_arm_ik_controller, point_cloud_mapper, navigator, station)
+        tidy_spot_planner.connect_components(builder, object_detector, grasp_selector, spot_arm_ik_controller, point_cloud_mapper, navigator, station)
 
         # Last component, add state interpolator which converts desired state to desired state and velocity
         state_interpolator = builder.AddSystem(StateInterpolatorWithDiscreteDerivative(10, 0.1, suppress_initial_transient=True))
@@ -227,13 +229,22 @@ def run_TidySpot(args):
                 AddMeshcatTriad(meshcat, "prepick_pose", length=0.1, radius=0.006, X_PT=spot_arm_ik_controller.prepick_pose)
             if spot_arm_ik_controller.desired_gripper_pose is not None:
                 AddMeshcatTriad(meshcat, "desired_gripper_pose", length=0.1, radius=0.006, X_PT=spot_arm_ik_controller.desired_gripper_pose)
+            if spot_arm_ik_controller.deposit_pose is not None:
+                AddMeshcatTriad(meshcat, "deposit_pose", length=0.1, radius=0.006, X_PT=spot_arm_ik_controller.deposit_pose)
 
-            inverse_dynamics_controller_context = inverse_dynamics_controller.GetMyContextFromRoot(context)
-            pid_output = inverse_dynamics_controller.get_output_port(0).Eval(inverse_dynamics_controller_context)
-            # print(f"Time: {context.get_time():.2f}")
-            # print("PID output (torques):", pid_output)
-            q9_pid_output_history.append(pid_output[9])
-            times.append(context.get_time())
+            # Reset spot PID controller if requested (non-ideal solution)
+            # if tidy_spot_planner.resetPID or spot_arm_ik_controller.resetPID:
+            #     print("Resetting PID controller")
+            #     inverse_dynamics_controller_context = inverse_dynamics_controller.GetMyContextFromRoot(context)
+            #     inverse_dynamics_controller.set_integral_value(inverse_dynamics_controller_context, np.zeros((10, 1)))
+
+
+            # inverse_dynamics_controller_context = inverse_dynamics_controller.GetMyContextFromRoot(context)
+            # pid_output = inverse_dynamics_controller.get_output_port(0).Eval(inverse_dynamics_controller_context)
+            # # print(f"Time: {context.get_time():.2f}")
+            # # print("PID output (torques):", pid_output)
+            # q9_pid_output_history.append(pid_output[9])
+            # times.append(context.get_time())
 
         # simulator.set_monitor(PrintStates)
         simulator.set_monitor(visualize_controller_poses_and_debug)
@@ -241,7 +252,7 @@ def run_TidySpot(args):
         meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 
         meshcat.StartRecording()
-        simulator.AdvanceTo(10)
+        simulator.AdvanceTo(30)
 
         ################
         ### TESTZONE ###

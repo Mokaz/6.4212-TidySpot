@@ -13,7 +13,6 @@ q_nominal_arm = np.array([0.0, -3.1, 3.1, 0.0, 0.0, 0.0, 0.0])
 
 def solve_ik(
     plant: MultibodyPlant,
-    context: Context,
     X_WT: RigidTransform,
     # target_frame_name: str = "arm_link_wr1",
     target_frame_name: str = "arm_link_fngr",
@@ -21,9 +20,9 @@ def solve_ik(
     fix_base: bool = True,
     rotation_bound: float = 0.01,
     position_bound: float = 0.01,
-    collision_bound: float = 0.001,
-    error_on_fail: bool = True,
+    assert_error_on_fail: bool = True,
     q_current=q_nominal_arm,
+    pure_vertical_movement: bool = False,
     max_iter: int = 20,
 ):
     """Convert the desired pose for Spot to joint angles, subject to constraints.
@@ -41,7 +40,9 @@ def solve_ik(
         collision_bound (float, optional): The minimum allowed distance between Spot and the other
         objects in the scene.
     """
+    
     for _ in range(max_iter):
+        context = plant.CreateDefaultContext()
         ik = InverseKinematics(plant, context)
         q = ik.q()  # Get variables for MathematicalProgram
         prog = ik.prog()  # Get MathematicalProgram
@@ -58,14 +59,24 @@ def solve_ik(
         p_WT = X_WT.translation()
         R_WT = X_WT.rotation()
 
-        # Constraints
+        if pure_vertical_movement:
+            # Position constraint: Keep x and y fixed at p_WT[0], p_WT[1],
+            # allow z to vary only downward by position_bound.
+            p_AQ_lower = np.array([p_WT[0], p_WT[1], p_WT[2] - position_bound])
+            p_AQ_upper = np.array([p_WT[0], p_WT[1], p_WT[2]])
+        else:
+            # Position constraint: Allow full 3D movement within position_bound.
+            p_AQ_lower = p_WT - position_bound
+            p_AQ_upper = p_WT + position_bound
+
         ik.AddPositionConstraint(
             frameA=world_frame,
             frameB=target_frame,
             p_BQ=np.zeros(3),
-            p_AQ_lower=p_WT - position_bound,
-            p_AQ_upper=p_WT + position_bound,
+            p_AQ_lower=p_AQ_lower,
+            p_AQ_upper=p_AQ_upper,
         )
+
         ik.AddOrientationConstraint(
             frameAbar=world_frame,
             R_AbarA=R_WT,
@@ -73,11 +84,6 @@ def solve_ik(
             R_BbarB=RotationMatrix(),
             theta_bound=rotation_bound,
         )
-        # # This is currently failing for some reason
-        # # collision constraint
-        # ik.AddMinimumDistanceLowerBoundConstraint(
-        #     collision_bound, influence_distance_offset=0.001
-        # )
 
         if fix_base:
             prog.AddConstraint(eq(q[:3], base_position))
@@ -91,103 +97,6 @@ def solve_ik(
         if result.is_success():
             print("IK successfully solved")
             return result.GetSolution(q)
-    if error_on_fail:
-        print("could not be solved")
-        raise AssertionError("IK failed :(")
-    return None
-
-def solve_ik_downwards_only(
-    plant: MultibodyPlant,
-    context: Context,
-    X_WT: RigidTransform,
-    target_frame_name: str = "arm_link_fngr",
-    base_position: np.ndarray = np.zeros(3),
-    fix_base: bool = True,
-    rotation_bound: float = 0.01,
-    position_bound: float = 0.01,
-    collision_bound: float = 0.001,
-    error_on_fail: bool = True,
-    q_current=q_nominal_arm,
-    max_iter: int = 20,
-):
-    """Convert the desired pose for Spot to joint angles, subject to constraints.
-       This version constrains movement so the target frame only moves straight downward.
-
-    Args:
-        plant (MultibodyPlant): The plant that contains the Spot model.
-        context (Context): The plant context
-        X_WT (RigidTransform): The target pose in the world frame.
-        target_frame_name (str, optional): The name of the frame for the IK target.
-        fix_base (bool, optional): If True, the body of Spot is fixed at the current pose.
-        rotation_bound (float, optional): Max allowed rotation error in radians.
-        position_bound (float, optional): Max allowed position variation downward.
-        collision_bound (float, optional): Min allowed distance between Spot and other objects.
-        error_on_fail (bool, optional): Raise AssertionError if solving fails.
-        q_current (np.ndarray, optional): Current joint configuration for initial guess.
-        max_iter (int, optional): Maximum number of solve attempts.
-
-    Returns:
-        np.ndarray: The solved joint configuration if successful, else None.
-    """
-    for _ in range(max_iter):
-        ik = InverseKinematics(plant, context)
-        q = ik.q()  # Get variables for MathematicalProgram
-        prog = ik.prog()  # Get MathematicalProgram
-
-        world_frame = plant.world_frame()
-        target_frame = plant.GetFrameByName(target_frame_name)
-
-        # Nominal pose
-        q0 = np.zeros(len(q))
-        q0[:3] = base_position
-        q0[3:10] = q_current
-
-        # Target position and rotation
-        p_WT = X_WT.translation()
-        R_WT = X_WT.rotation()
-
-        # Position constraint:
-        # Keep x and y fixed at p_WT[0], p_WT[1],
-        # allow z to vary only downward by position_bound.
-        p_AQ_lower = np.array([p_WT[0], p_WT[1], p_WT[2] - position_bound])
-        p_AQ_upper = np.array([p_WT[0], p_WT[1], p_WT[2]])
-
-        ik.AddPositionConstraint(
-            frameA=world_frame,
-            frameB=target_frame,
-            p_BQ=np.zeros(3),
-            p_AQ_lower=p_AQ_lower,
-            p_AQ_upper=p_AQ_upper,
-        )
-
-        # Orientation constraint remains the same
-        ik.AddOrientationConstraint(
-            frameAbar=world_frame,
-            R_AbarA=R_WT,
-            frameBbar=target_frame,
-            R_BbarB=RotationMatrix(),
-            theta_bound=rotation_bound,
-        )
-
-        # If you want collision constraints, you can uncomment this
-        # ik.AddMinimumDistanceLowerBoundConstraint(
-        #     collision_bound, influence_distance_offset=0.001
-        # )
-
-        if fix_base:
-            prog.AddConstraint(eq(q[:3], base_position))
-
-        q_start = q0.copy()
-        q_start[3:10] = q_current
-        prog.AddQuadraticErrorCost(np.identity(len(q)), q0, q)
-        prog.SetInitialGuess(q, q_start)
-
-        result = Solve(ik.prog())
-        if result.is_success():
-            print("IK successfully solved with downward-only movement.")
-            return result.GetSolution(q)
-
-    if error_on_fail:
-        print("IK with downwards only movement could not be solved")
-        raise AssertionError("IK failed :(")
+    if assert_error_on_fail:
+        raise AssertionError("IK failed to converge")
     return None
