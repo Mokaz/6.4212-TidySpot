@@ -46,16 +46,17 @@ class SpotArmIKController(LeafSystem):
         self.time_step = time_step
 
         self._commanded_arm_position = q_nominal_arm
-        self.curr_commanded_pose = None
+        self._added_gripper_force = np.zeros(10)
 
         self.desired_gripper_pose = None
         self.prepick_pose = None
 
-        self.prepick_offset = [0.01, 0, 0.2]
-        self.gripper_offset = [0.01, 0, 0.08]
+        self.prepick_offset = [0.01, 0, 0.2] # Temp
+        self.gripper_offset = [0.01, 0, 0.075]
         self.gripper_open_angle = -1.0
+        self.gripper_close_duration = 5.0
 
-        self.gripper_close_time = 0.0
+        self.gripper_close_start_time = 0.0
         self.gripper_open_time = 0.0
 
         self._last_solve = 0.0
@@ -77,6 +78,7 @@ class SpotArmIKController(LeafSystem):
 
         # Output ports
         self.DeclareVectorOutputPort("desired_spot_arm_position", 7, self.UpdateDesiredArmPosition)
+        self.DeclareVectorOutputPort("added_gripper_force", 10, self.UpdateAddedGripperForce)
 
         self.DeclareStateOutputPort("done_grasp", self._done_grasp) # TODO: Add success/fail flag
         # self.DeclareStateOutputPort("is_grasping", self._is_grasping)
@@ -87,22 +89,29 @@ class SpotArmIKController(LeafSystem):
         self._last_print_time = 0.0
         self.solving_num = 0
 
-    def connect_components(self, builder, spot_station, base_position_commander, grasp_selector):
+    def connect_components(self, builder, station, navigator, grasp_selector):
         builder.Connect(
             grasp_selector.GetOutputPort("grasp_selection"),
             self.GetInputPort("desired_gripper_pose"),
         )
         builder.Connect(
-            spot_station.GetOutputPort("spot.state_estimated"),
+            station.GetOutputPort("spot.state_estimated"),
             self.GetInputPort("spot.state_estimated"),
         )
         builder.Connect(
-            base_position_commander.GetOutputPort("spot_commanded_position"),
+            navigator.GetOutputPort("spot_commanded_position"),
             self.GetInputPort("commanded_base_position"),
+        )
+        builder.Connect(
+            self.GetOutputPort("added_gripper_force"),
+            station.GetInputPort("spot.added_actuation_force"),
         )
 
     def UpdateDesiredArmPosition(self, context: Context, output):
         output.SetFromVector(self._commanded_arm_position)
+
+    def UpdateAddedGripperForce(self, context: Context, output):
+        output.SetFromVector(self._added_gripper_force)
 
     def Update(self, context: Context, state):
         curr_estimated_spot_state = self.spot_state_estimated_input.Eval(context)
@@ -159,8 +168,6 @@ class SpotArmIKController(LeafSystem):
                 desired_gripper_pose_is_default = np.allclose(self.desired_gripper_pose.rotation().matrix(), np.eye(3)) and np.allclose(self.desired_gripper_pose.translation(), np.zeros(3))
                 
                 try:
-                    assert self.curr_commanded_pose != self.desired_gripper_pose, \
-                        "Invalid desired gripper pose: It matches the current commanded pose."
                     if desired_gripper_pose_is_default:
                         print("Invalid desired gripper pose: It is the default pose.")
                         return
@@ -214,33 +221,45 @@ class SpotArmIKController(LeafSystem):
 
             if controller_state == ControllerState.REACHING_PICK:   
                 # if DEBUG and context.get_time() - self._last_print_time > 0.3:
-                #     # print("Current Arm Position: ", np.round(curr_q, 4))
-                #     # print("Commanded Arm Position: ", np.round(self._commanded_arm_position, 4))
-                #     print("Difference: ", np.round(np.abs(curr_q - self._commanded_arm_position), 4))
+                # #     # print("Current Arm Position: ", np.round(curr_q, 4))
+                # #     # print("Commanded Arm Position: ", np.round(self._commanded_arm_position, 4))
+                # #     print("Difference: ", np.round(np.abs(curr_q - self._commanded_arm_position), 4))
                 #     self._last_print_time = context.get_time()
                 
                 if np.allclose(curr_q[:6], self._commanded_arm_position[:6], atol=0.05) and np.allclose(curr_q_dot, np.zeros(7), atol=0.05):
                     print("Reached the PICK pose. Closing gripper")
-                    self._commanded_arm_position[6] = 0.0
-                    self.gripper_close_time = context.get_time()
+                    print("CLOSING GRIPPER TIME: ", context.get_time())
+
+                    self.gripper_close_start_time = context.get_time()
+                    self.gripper_close_end_time = self.gripper_close_start_time + self.gripper_close_duration
+                    self._added_gripper_force[-1] = 3.0
                     state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.CLOSING_GRIPPER)
 
 
             if controller_state == ControllerState.CLOSING_GRIPPER:
                 if DEBUG and context.get_time() - self._last_print_time > 0.5:
-                    print("Closing gripper")
-                    print("Current Gripper Position: ", curr_q[6])
-                    print("Commanded Gripper Position: ", self._commanded_arm_position[6])
-                    print("Difference: ", np.abs(curr_q[6] - self._commanded_arm_position[6]))
+                    # print("Current Gripper Position: ", curr_q[6])
+                    # print("Commanded Gripper Position: ", self._commanded_arm_position[6])
+                    # print("Difference: ", np.abs(curr_q[6] - self._commanded_arm_position[6]))
+                    # print("Current Arm Position: ", np.round(curr_q, 4))
+                    # print("Commanded Arm Position: ", np.round(self._commanded_arm_position, 4))
+                    # print("Difference: ", np.round(np.abs(curr_q - self._commanded_arm_position), 4))
                     self._last_print_time = context.get_time()
+
+                # relative_close_time_elapsed = (context.get_time() - self.gripper_close_start_time) / (self.gripper_close_duration)
+                # gripper_angle = np.interp(relative_close_time_elapsed, [0, 1], [self.gripper_open_angle, 0.0])
+                # self._commanded_arm_position[6] = gripper_angle
                 
-                # if context.get_time() - self.gripper_close_time > 1:
-                #     print("Gripper closed. Returning to nominal arm pose.")
-                #     self._commanded_arm_position = q_nominal_arm
-                #     state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.RETURN_TO_NOMINAL_ARM)
+                if context.get_time() > self.gripper_close_end_time:
+                    print("Gripper closed. Returning to nominal arm pose.")
+                    self._commanded_arm_position = q_nominal_arm
+                    state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.RETURN_TO_NOMINAL_ARM)
 
             if controller_state == ControllerState.RETURN_TO_NOMINAL_ARM:
                 if np.allclose(curr_q, q_nominal_arm, atol=0.03) and np.allclose(curr_q_dot, np.zeros(7), atol=0.03):
                     print("Returned to nominal arm pose. Ready to transport")
                     # state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.IDLE)
                     # done_grasp_state.set_value([1])
+
+        if controller_mission == ControllerMission.DEPOSIT:
+            pass

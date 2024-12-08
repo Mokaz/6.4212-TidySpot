@@ -14,7 +14,7 @@ model_drivers:
         arm_el1: {kp: 1, ki: 0.1, kd: 15}
         arm_wr0: {kp: 1, ki: 0.1, kd: 15}
         arm_wr1: {kp: 1, ki: 0.1, kd: 15}
-        arm_f1x: {kp: 10, ki: 0.1, kd: 30}
+        arm_f1x: {kp: 1, ki: 0.1, kd: 15}
 
 cameras:
   back:

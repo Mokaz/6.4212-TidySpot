@@ -9,7 +9,7 @@ from manipulation import FindResource, running_as_notebook
 from manipulation.station import (
     AppendDirectives,
     LoadScenario,
-    MakeHardwareStation,
+    # MakeHardwareStation,
 )
 
 from TidySpotFSM import TidySpotFSM
@@ -20,6 +20,9 @@ from controller.PositionCombiner import PositionCombiner
 from controller.SpotArmIKController import SpotArmIKController
 
 from utils import *
+# from station import MakeHardwareStation
+from tidyspot_hw_station.tidyspotHardwareStation import MakeHardwareStation
+
 from perception.ObjectDetector import ObjectDetector
 from grasping.GraspSelector import GraspSelector
 from grasping.PointCloudCropper import PointCloudCropper
@@ -87,6 +90,7 @@ def run_TidySpot(args):
         station = builder.AddSystem(MakeHardwareStation(
             scenario=scenario,
             meshcat=meshcat,
+            # parser_preload_callback=lambda parser: parser.package_map().AddPackageXml("robots/spot_description/package.xml")
             parser_preload_callback=lambda parser: parser.package_map().PopulateFromFolder(os.getcwd())
         ))
 
@@ -177,6 +181,8 @@ def run_TidySpot(args):
         object_detector_context = object_detector.GetMyMutableContextFromRoot(context)
         # controller_context = controller.GetMyMutableContextFromRoot(context)
 
+        inverse_dynamics_controller = station.GetSubsystemByName("spot.controller")
+
         ### Set initial Spot state ###
         x0 = station.GetOutputPort("spot.state_estimated").Eval(station_context)
         # Don't FixValue here - this will override the controller's commands
@@ -210,7 +216,10 @@ def run_TidySpot(args):
             print(f"Goal: {goal[:3]}")
             print("---")
 
-        def visualize_controller_poses(context):
+        q9_pid_output_history = []
+        times = [] 
+
+        def visualize_controller_poses_and_debug(context):
             gripper_pose = plant.EvalBodyPoseInWorld(plant_context, plant.GetBodyByName("arm_link_fngr"))
             AddMeshcatTriad(meshcat, "arm_link_fngr", length=0.1, radius=0.006, X_PT=gripper_pose)
             if spot_arm_ik_controller.prepick_pose is not None:
@@ -218,15 +227,20 @@ def run_TidySpot(args):
             if spot_arm_ik_controller.desired_gripper_pose is not None:
                 AddMeshcatTriad(meshcat, "desired_gripper_pose", length=0.1, radius=0.006, X_PT=spot_arm_ik_controller.desired_gripper_pose)
 
-            
+            inverse_dynamics_controller_context = inverse_dynamics_controller.GetMyContextFromRoot(context)
+            pid_output = inverse_dynamics_controller.get_output_port(0).Eval(inverse_dynamics_controller_context)
+            # print(f"Time: {context.get_time():.2f}")
+            # print("PID output (torques):", pid_output)
+            q9_pid_output_history.append(pid_output[9])
+            times.append(context.get_time())
 
         # simulator.set_monitor(PrintStates)
-        simulator.set_monitor(visualize_controller_poses)
+        simulator.set_monitor(visualize_controller_poses_and_debug)
 
         meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 
         meshcat.StartRecording()
-        simulator.AdvanceTo(5)
+        simulator.AdvanceTo(10)
 
         ################
         ### TESTZONE ###
@@ -260,6 +274,14 @@ def run_TidySpot(args):
 
         # # Keep meshcat alive
         meshcat.PublishRecording()
+
+        # plt.figure()
+        # plt.plot(times, q9_pid_output_history)
+        # plt.xlabel('Time [s]')
+        # plt.ylabel('q9_pid_output_history')
+        # plt.title('q9 Force Outputs Over Time')
+        # plt.grid(True)
+        # plt.show()
 
         while not meshcat.GetButtonClicks("Stop meshcat"):
             pass
