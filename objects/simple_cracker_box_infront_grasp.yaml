@@ -42,7 +42,7 @@ directives:
         translation: [0, -5.5, -0.047]
         rotation: !Rpy { deg: [0, 90, 90]}
 - add_model:
-    name: cracker
+    name: obj_cracker
     file: package://manipulation/hydro/003_cracker_box.sdf
     default_free_body_pose:
         base_link_cracker:
