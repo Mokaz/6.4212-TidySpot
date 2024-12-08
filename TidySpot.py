@@ -76,7 +76,8 @@ def run_TidySpot(args):
         # Enable depth images for all cameras and collect camera names (BUG: False by default?)
         for camera_name, camera_config in scenario.cameras.items():
             camera_config.depth = True
-            camera_names.append(camera_name)
+            if camera_name != "hand" and camera_name != "back":
+                camera_names.append(camera_name)
 
             if image_size is None:
                 image_size = (camera_config.width, camera_config.height)
@@ -217,7 +218,7 @@ def run_TidySpot(args):
             print("---")
 
         q9_pid_output_history = []
-        times = [] 
+        times = []
 
         def visualize_controller_poses_and_debug(context):
             gripper_pose = plant.EvalBodyPoseInWorld(plant_context, plant.GetBodyByName("arm_link_fngr"))

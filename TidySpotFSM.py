@@ -35,7 +35,7 @@ class TidySpotFSM(LeafSystem):
         # Internal variables
         self.bin_location = bin_location
         self.path_planning_goal = (0, 0, 0)  # Goal for path planning, if self.path_planning_goal[2] == None then Navigator will autogenerate final heading
-        
+
         # Input ports
         self._spot_body_state_index = self.DeclareVectorInputPort("body_poses", 20).get_index()
         self._path_planning_desired_index = self.DeclareVectorInputPort("path_planning_desired", 3).get_index()
@@ -167,6 +167,7 @@ class TidySpotFSM(LeafSystem):
         elif current_state == SpotState.GRASP_OBJECT:
             if self._get_grasping_completed(context, state):
                 print("Grasping object successful.")
+                state.get_mutable_discrete_state(self.do_arm_controller_mission).set_value([0])
 
                 print(f"Transporting object to bin at {self.bin_location} ...")
                 self.transport_object()

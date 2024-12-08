@@ -19,6 +19,7 @@ from .InverseKinematics import solve_ik, solve_ik_downwards_only
 
 # nominal joint angles for Spot's arm (for joint centering)
 q_nominal_arm = np.array([0.0, -3.1, 3.1, 0.0, 0.0, 0.0, 0.0])
+q_carry_arm = np.array([0.0, -2.5, 1.5, 0.0, 1.5, 0.0, 0.0])
 DEBUG = True
 VIZUALIZE_POSES = True
 
@@ -29,6 +30,7 @@ class ControllerState(Enum):
     REACHING_PICK = auto()
     CLOSING_GRIPPER = auto()
     RETURN_TO_NOMINAL_ARM = auto()
+    STOP = auto()
 
 class ControllerMission(Enum):
     STOP = 0
@@ -54,7 +56,7 @@ class SpotArmIKController(LeafSystem):
         self.prepick_offset = [0.01, 0, 0.2] # Temp
         self.gripper_offset = [0.01, 0, 0.075]
         self.gripper_open_angle = -1.0
-        self.gripper_close_duration = 5.0
+        self.gripper_close_duration = 3.0
 
         self.gripper_close_start_time = 0.0
         self.gripper_open_time = 0.0
@@ -234,6 +236,7 @@ class SpotArmIKController(LeafSystem):
                     self.gripper_close_end_time = self.gripper_close_start_time + self.gripper_close_duration
                     self._added_gripper_force[-1] = 3.0
                     state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.CLOSING_GRIPPER)
+                    self.prev_gripper_position = curr_q[6]
 
 
             if controller_state == ControllerState.CLOSING_GRIPPER:
@@ -245,17 +248,34 @@ class SpotArmIKController(LeafSystem):
                     # print("Commanded Arm Position: ", np.round(self._commanded_arm_position, 4))
                     # print("Difference: ", np.round(np.abs(curr_q - self._commanded_arm_position), 4))
                     self._last_print_time = context.get_time()
-
-                # if context.get_time() - self.gripper_close_time > 1:
-                #     print("Gripper closed. Returning to nominal arm pose.")
-                #     self._commanded_arm_position = q_nominal_arm
-                #     state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.RETURN_TO_NOMINAL_ARM)
+                is_gripper_closed = np.abs(curr_q[6] - self.prev_gripper_position) < 0.01
+                self.prev_gripper_position = curr_q[6]
+                if context.get_time() - self.gripper_close_end_time > 1 or is_gripper_closed:
+                    print("Gripper closed. Returning to nominal arm pose.")
+                    self._commanded_arm_position = curr_q
+                    state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.RETURN_TO_NOMINAL_ARM)
+                    self.transition_start_time = context.get_time()
 
             if controller_state == ControllerState.RETURN_TO_NOMINAL_ARM:
-                if np.allclose(curr_q, q_nominal_arm, atol=0.03) and np.allclose(curr_q_dot, np.zeros(7), atol=0.03):
-                    print("Returned to nominal arm pose. Ready to transport")
-                    # state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.IDLE)
-                    # done_grasp_state.set_value([1])
+                if self.transition_start_time is None:
+                    self.transition_start_time = context.get_time()
+
+                elapsed_time = context.get_time() - self.transition_start_time
+                transition_duration = 3.0  # Time in seconds to complete transition
+
+                if elapsed_time < transition_duration:
+                    # Linear interpolation from current position to nominal position
+                    alpha = elapsed_time / transition_duration
+                    self._commanded_arm_position = (1 - alpha) * curr_q + alpha * q_carry_arm
+                    print(f"Transitioning to carry pose: {self._commanded_arm_position}")
+                else:
+                    # Finalize the transition once time has elapsed
+                    self._commanded_arm_position = q_carry_arm
+                    if np.allclose(curr_q, q_carry_arm, atol=0.8) and np.allclose(curr_q_dot, np.zeros(7), atol=0.1):
+                        print("Returned to nominal arm pose. Ready to transport")
+                        state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.IDLE)
+                        self.transition_start_time = None  # Reset the transition time for future use
+                        state.get_mutable_discrete_state(self._done_grasp).set_value([1])
 
         if controller_mission == ControllerMission.DEPOSIT:
             pass
