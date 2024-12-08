@@ -217,18 +217,21 @@ class SpotArmIKController(LeafSystem):
                         state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.REACHING_PICK)
 
                         self._last_print_time = context.get_time()
+                        self.prev_arm_position = curr_q
 
                     except AssertionError as e:
                         print(f"AssertionError caught: {e}")
 
             if controller_state == ControllerState.REACHING_PICK:
                 # if DEBUG and context.get_time() - self._last_print_time > 0.3:
-                # #     # print("Current Arm Position: ", np.round(curr_q, 4))
-                # #     # print("Commanded Arm Position: ", np.round(self._commanded_arm_position, 4))
-                # #     print("Difference: ", np.round(np.abs(curr_q - self._commanded_arm_position), 4))
+                #     print("Current Arm Position: ", np.round(curr_q, 4))
+                #     print("Commanded Arm Position: ", np.round(self._commanded_arm_position, 4))
+                #     print("Difference: ", np.round(np.abs(curr_q - self._commanded_arm_position), 4))
                 #     self._last_print_time = context.get_time()
 
-                if np.allclose(curr_q[:6], self._commanded_arm_position[:6], atol=0.1) and np.allclose(curr_q_dot, np.zeros(7), atol=0.1):
+                is_gripper_stopped = np.allclose(curr_q, self.prev_arm_position, atol=0.2)
+                self.prev_gripper_position = curr_q[6]
+                if is_gripper_stopped or np.allclose(curr_q[:6], self._commanded_arm_position[:6], atol=0.1) and np.allclose(curr_q_dot, np.zeros(7), atol=0.1):
                     print("Reached the PICK pose. Closing gripper")
                     print("CLOSING GRIPPER TIME: ", context.get_time())
 
