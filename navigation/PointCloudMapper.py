@@ -62,7 +62,14 @@ class PointCloudMapper(LeafSystem):
 
     def CalcObjectClusters(self, context: Context, output: AbstractValue):
         # Set the output to the current object clusters
-        output.set_value(self.object_clusters)
+        # instead of returning them all, we will return one that hasn't been grasp attempted
+        for cluster_id, cluster in self.object_clusters.items():
+            if not cluster["attempted_grasp"]:
+                cluster["attempted_grasp"] = True
+                output.set_value(cluster)
+                return
+
+        output.set_value(self.object_clusters.get(1, {}))
 
     def CalcGridMap(self, context: Context, output: AbstractValue):
         self.robot_state = self.GetInputPort("spot.state_estimated").Eval(context)
@@ -231,7 +238,6 @@ class PointCloudMapper(LeafSystem):
         labeled_grid, num_features = label(self.grid_map == 2)
 
         # Create a dictionary to store clusters
-        self.object_clusters = {}
         for i in range(1, num_features + 1):
             cluster_indices = np.argwhere(labeled_grid == i)
             grid_points = cluster_indices.tolist()
@@ -245,13 +251,16 @@ class PointCloudMapper(LeafSystem):
             centroid_x = (centroid_grid[0] - (self.grid_map.shape[0] // 2)) * self.resolution
             centroid_y = (centroid_grid[1] - (self.grid_map.shape[1] // 2)) * self.resolution
 
-            self.object_clusters[i] = {
-                "grid_points": grid_points,
-                "centroid": {
-                    "grid": centroid_grid.tolist(),
-                    "world": (centroid_x, centroid_y)
+            # Add the cluster to the dictionary if it is not already present
+            if i not in self.object_clusters:
+                self.object_clusters[i] = {
+                    "grid_points": grid_points,
+                    "centroid": {
+                        "grid": centroid_grid.tolist(),
+                        "world": (centroid_x, centroid_y)
+                    },
+                    "attempted_grasp": False,
                 }
-            }
 
     def find_unexplored_frontiers(self) -> List[Tuple[int, int]]:
         """

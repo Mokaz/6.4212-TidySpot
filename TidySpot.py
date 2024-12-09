@@ -53,7 +53,7 @@ def run_TidySpot(args):
     use_grounded_sam = args.perception_type == "sam"
     device = args.device
     scenario_path = args.scenario
-    automatic_clutter_generation = False
+    automatic_clutter_generation = True
 
     try:
         ### Start the visualizer ###
@@ -123,12 +123,13 @@ def run_TidySpot(args):
         ### PLANNER ###
 
         # Add point cloud mapper for path planner
-        point_cloud_mapper = builder.AddSystem(PointCloudMapper(station, camera_names, to_point_cloud, bin_location=bin_location, bin_size=(4,4), resolution=0.1,  meshcat=meshcat))
+        bin_size = (0.8, 0.8) # HARDCODED BIN SIZE
+        point_cloud_mapper = builder.AddSystem(PointCloudMapper(station, camera_names, to_point_cloud, bin_location=bin_location, bin_size=bin_size, resolution=0.1,  meshcat=meshcat))
         point_cloud_mapper.set_name("point_cloud_mapper")
         point_cloud_mapper.connect_components(point_cloud_cropper, station, builder)
 
         # Add path planner and mapper
-        navigator = builder.AddSystem(Navigator(station, builder, np.array([0,0,0]), resolution=0.1, meshcat=meshcat, visualize=True))
+        navigator = builder.AddSystem(Navigator(station, builder, np.array([0,0,0]), resolution=0.1, bin_location=bin_location, meshcat=meshcat, visualize=True))
         navigator.set_name("navigator")
         navigator.connect_mapper(point_cloud_mapper, station, builder)
 
@@ -251,7 +252,7 @@ def run_TidySpot(args):
         meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 
         meshcat.StartRecording()
-        simulator.AdvanceTo(20)
+        simulator.AdvanceTo(40)
 
         ################
         ### TESTZONE ###

@@ -17,7 +17,7 @@ from pydrake.all import (
 )
 from typing import List, Tuple, Mapping
 
-DO_DBSCAN_CLUSTERING = True
+DO_DBSCAN_CLUSTERING = False
 
 class PointCloudCropper(LeafSystem):
     def __init__(self, camera_names: List[str], meshcat=None):
@@ -72,10 +72,13 @@ class PointCloudCropper(LeafSystem):
     def CropGraspingObjectPointCloud(self, context: Context, output):
         segmentation_masks_dict = self._grasping_object_segmentation_input.Eval(context)
         cropped_object_pcd = self.CropPointCloudBySegmentation(context, output, segmentation_masks_dict)
-        output.set_value(cropped_object_pcd)
+        if cropped_object_pcd is None:
+            output.set_value(PointCloud(0))
+        else:
+            output.set_value(cropped_object_pcd)
 
     def CropPointCloudBySegmentation(self, context: Context, output, segmentation_masks_dict):
-        if not segmentation_masks_dict:
+        if not segmentation_masks_dict or all([len(segmentation_masks_dict.values()) == 0]):
             output.set_value(PointCloud(0))
             print("CropPointcloud: No segmentation masks received.")
             return

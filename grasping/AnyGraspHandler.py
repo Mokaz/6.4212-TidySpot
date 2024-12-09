@@ -22,7 +22,7 @@ class AnyGraspHandler:
             cfgs = SimpleNamespace(
                 checkpoint_path=os.path.join(anygrasp_path, 'grasp_detection', 'checkpoints', 'checkpoint_detection.tar'),
                 max_gripper_width=0.1,
-                gripper_height=0.03,
+                gripper_height=0.1, # spots gripper is 0.124
                 top_down_grasp=False,  # Set to True if needed
                 debug=False
             )

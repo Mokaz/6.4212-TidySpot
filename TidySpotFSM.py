@@ -50,6 +50,7 @@ class TidySpotFSM(LeafSystem):
         self.DeclareVectorInputPort("navigation_complete", 1)
         self.DeclareVectorInputPort("frontier", 2)
         self.DeclareVectorInputPort("controller_complete", 1) # TODO: Add success/fail flag to data sent to this port
+        self._grid_map_input_index = self.DeclareAbstractInputPort("grid_map", AbstractValue.Make(np.zeros((100, 100)))).get_index()
 
         # Output ports
         # Declare output ports for the path planner. The path planner then sends to the actual robot
@@ -83,6 +84,7 @@ class TidySpotFSM(LeafSystem):
         builder.Connect(point_cloud_mapper.GetOutputPort("object_clusters"), self._object_clusters_input) # TODO: Check that output name is correct
         # connect the mappers frontier to the FSM
         builder.Connect(point_cloud_mapper.GetOutputPort("frontier"), self.GetInputPort("frontier"))
+        builder.Connect(point_cloud_mapper.GetOutputPort("grid_map"), self.GetInputPort("grid_map")) # Output grid_map from mapper to input grid_map of planner
 
         # Connect GraspSelector to the FSM
         builder.Connect(self.GetOutputPort("current_object_location"), grasp_selector.GetInputPort("current_object_location"))
@@ -127,10 +129,24 @@ class TidySpotFSM(LeafSystem):
             else:
                 self.set_new_random_exploration_goal(context)
 
-            print("State: IDLE -> EXPLORE")
-            state.get_mutable_abstract_state(
-                int(self._state_index)
-            ).set_value(SpotState.EXPLORE)
+            # From IDLE we can either explore, or if we already know there are objects we can approach them
+            if self.check_detections():
+                grid_points, centroid, _ = self.object_clusters.values() # if object_clusters exists, there will always be one with key value 1
+                print(f"Found object at {centroid['world']}, approaching ...")
+
+                self.current_object_location = centroid["world"]
+
+                self.approach_object(self.current_object_location)
+
+                print("State: IDLE -> APPROACH_OBJECT")
+                state.get_mutable_abstract_state(
+                    int(self._state_index)
+                ).set_value(SpotState.APPROACH_OBJECT)
+            else:
+                print("State: IDLE -> EXPLORE")
+                state.get_mutable_abstract_state(
+                    int(self._state_index)
+                ).set_value(SpotState.EXPLORE)
 
         elif current_state == SpotState.EXPLORE: # TODO: Handle case where object is detected during exploration
             # Explore until an object is detected
@@ -139,7 +155,7 @@ class TidySpotFSM(LeafSystem):
                 print("ASTAR DONE RECEIVED: Exploration completed to area.")
 
                 if self.check_detections():
-                    grid_points, centroid = self.object_clusters[1].values() # if object_clusters exists, there will always be one with key value 1
+                    grid_points, centroid, _ = self.object_clusters.values() # if object_clusters exists, there will always be one with key value 1
                     print(f"Found object at {centroid['world']}, approaching ...")
 
                     self.current_object_location = centroid["world"]
@@ -180,6 +196,9 @@ class TidySpotFSM(LeafSystem):
         elif current_state == SpotState.GRASP_OBJECT:
             if self._get_controller_completed(context, state):
                 print("Grasping object successful.")
+                # update the grid_map so we don't still think the object is there
+                self.grid_map = self.EvalAbstractInput(context, self._grid_map_input_index).get_value()
+
                 state.get_mutable_discrete_state(self.do_arm_controller_mission).set_value([0])
 
                 print(f"Transporting object to bin at {self.bin_location} ...")
@@ -216,11 +235,11 @@ class TidySpotFSM(LeafSystem):
                 print("Depositing object successful.")
 
                 print("State: DEPOSIT_OBJECT -> RETURN_TO_IDLE")
-                
+
 
                 # Reset spot PID controller
                 self.resetPID = True
-                
+
                 state.get_mutable_abstract_state(
                     int(self._state_index)
                 ).set_value(SpotState.RETURN_TO_IDLE)

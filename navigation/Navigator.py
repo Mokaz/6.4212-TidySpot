@@ -88,7 +88,7 @@ class Navigator(LeafSystem):
         self.current_waypoint_idx = 0
         self.goal = None
         self.iters_at_current_waypoint = 0
-        self.max_iters_at_current_waypoint = 60
+        self.max_iters_at_current_waypoint = 10
         self.bin_location = bin_location
 
         # Periodic update for trajectory generation
@@ -226,6 +226,7 @@ class Navigator(LeafSystem):
                 new_waypoints = self.find_nearest_free_space_with_heading(current_position, self.grid_map)
                 self.waypoints = new_waypoints
                 self.current_waypoint_idx = 0
+                self.iters_at_current_waypoint = 0
 
             elif self.waypoints is None:
                 self.iters_at_current_waypoint = 0
@@ -400,14 +401,14 @@ class Navigator(LeafSystem):
 
         if nearest_obstacle is not None:
             # Calculate a direction away from the obstacle
-            obstacle_world = self.grid_to_world(nearest_obstacle, grid_map.shape)
+            obstacle_world = convert_to_world_coordinates(*nearest_obstacle, self.resolution, grid_map.shape)
             current_world = current_position[:2]
             direction = current_world - obstacle_world
             direction /= np.linalg.norm(direction)  # Normalize
 
             # Create waypoints moving away in the same heading direction
             waypoints = []
-            for i in range(1, 3):  # Create 3 waypoints at 0.1m intervals
+            for i in range(1, 4):  # Create 3 waypoints at 0.1m intervals
                 new_position = current_world + direction * i * 0.1
                 waypoints.append([new_position[0], new_position[1], current_position[2]])
 

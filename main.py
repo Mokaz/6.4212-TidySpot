@@ -27,13 +27,13 @@ if __name__ == "__main__":
     parser.add_argument(
         "--scenario",
         type=str,
-        default="objects/added_object_directives.yaml", 
-        # others: 
+        default="objects/added_object_directives.yaml",
+        # others:
         # "objects/blank_scene.yaml"
         # "objects/dorm_room_scene.yaml"
         help="Path to scenario yaml file",
     )
-    
+
     parser.add_argument(
         "--device",
         type=str,
