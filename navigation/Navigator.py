@@ -13,6 +13,7 @@ import math
 import numpy as np
 import matplotlib.pyplot as plt
 import heapq
+from scipy.interpolate import CubicSpline
 from pydrake.trajectories import PiecewisePolynomial
 from pydrake.all import (
     AbstractValue,
@@ -98,6 +99,7 @@ class Navigator(LeafSystem):
         self.inflate_obstacles = True
         self.allow_unknown_pathing = True
         self.goal_object_location = None
+        self.max_rotation_degrees = 8
         self.grid_map = np.zeros((100, 100))
 
     def connect_mapper(self, point_cloud_mapper, station: Diagram, builder: DiagramBuilder):
@@ -173,14 +175,14 @@ class Navigator(LeafSystem):
                 # Check if we've reached the current waypoint
                 distance_to_waypoint = np.linalg.norm(current_waypoint[:2] - current_position[:2])
                 # if we are at the last waypoint, make sure we also match the heading and have more precision on the last point
-                angle_okay = True # we don't really care about angle unless its the last point
-                threshold = 0.2
+                angle_okay = abs(current_position[2] - current_waypoint[2]) < 0.2 # about 10 degrees
+                threshold = 0.1
                 # iteratively check nodes, since we might satisfy multiple conditions of sequential nodes
                 while distance_to_waypoint < threshold and angle_okay:  # 10cm threshold
 
                     if self.current_waypoint_idx == len(self.waypoints) - 1:
                         angle_okay = abs(current_position[2] - current_waypoint[2]) < 0.2 # about 10 degrees
-                        threshold = 0.15
+                        threshold = 0.1
                         if not (distance_to_waypoint < threshold and angle_okay):
                             # if we haven't satisfied the stricter conditions of the last node, break
                             break
@@ -251,7 +253,6 @@ class Navigator(LeafSystem):
                         selected_points = points[indices]
                     else:
                         selected_points = np.vstack((rx[::-1], ry[::-1])).T  # Reverse path and combine x,y
-                        indices = range(len(rx))
                     headings = np.zeros(len(selected_points))
 
                     # Calculate heading angles to face next waypoint
@@ -267,8 +268,24 @@ class Navigator(LeafSystem):
                     else:
                         headings[-1] = self.goal[2]  # Use the goal's heading
 
+                    # start heading should be current robot heading
+                    headings[0] = current_position[2]
+
+                    # self.waypoints = self.generate_smooth_trajectory(selected_points, headings, resolution=0.3)
+                    smoothed_headings = self.generate_smooth_headings(selected_points, headings)
+
+                    # Ensure the final heading is achieved by adding extra points if necessary
+                    while abs((smoothed_headings[-1] - headings[-1])%np.pi) > np.radians(self.max_rotation_degrees):
+                        delta = smoothed_headings[-1] - headings[-1]
+                        delta = (delta + np.pi) % (2 * np.pi) - np.pi
+                        additional_heading = smoothed_headings[-1] - np.sign(delta) * np.radians(self.max_rotation_degrees)
+
+                        # Add an extra point at the same xy location but with adjusted heading
+                        selected_points = np.vstack((selected_points, selected_points[-1]))
+                        smoothed_headings = np.append(smoothed_headings, additional_heading)
+
                     # Combine positions and headings into waypoints
-                    self.waypoints = np.column_stack((selected_points, headings))
+                    self.waypoints = np.column_stack((selected_points, smoothed_headings))
                     self.current_waypoint_idx = 0
                     desired_position = self.waypoints[self.current_waypoint_idx]
 
@@ -276,13 +293,12 @@ class Navigator(LeafSystem):
                     # self.goal[:2] = self.waypoints[-1][:2]
 
                     # print(f"New waypoints set len {len(self.waypoints)}, first desired_position:", desired_position)
-
                     # Visualize goal and path using meshcat
                     if self.visualize and self.meshcat:
                         # Clear existing visualization
                         self.meshcat.Delete("planned_path")
                         # Draw green lines between waypoints
-                        waypoint_points = np.vstack((selected_points.T, np.zeros(len(indices))))
+                        waypoint_points = np.vstack((selected_points.T, np.zeros(len(selected_points))))
                         self.meshcat.SetLine(
                             "planned_path",
                             waypoint_points,
@@ -328,6 +344,64 @@ class Navigator(LeafSystem):
         state.get_mutable_discrete_state(self._spot_commanded_position).SetFromVector(self.spot_commanded_position)
         state.get_mutable_discrete_state(self._previous_navigator_state).set_value([navigator_state])
 
+    def generate_smooth_headings(self, selected_points, headings):
+        """
+        Smooth out the headings to ensure the change between consecutive headings is no more than 30 degrees.
+
+        Args:
+            selected_points (np.ndarray): Nx2 array of waypoints [x, y].
+            headings (np.ndarray): N array of headings (in radians).
+
+        Returns:
+            np.ndarray: Smoothed headings array.
+        """
+        max_delta_heading = np.radians(self.max_rotation_degrees)  # Maximum allowed change in heading (30 degrees)
+        smoothed_headings = headings.copy()
+
+        for i in range(1, len(smoothed_headings)):
+            delta = smoothed_headings[i] - smoothed_headings[i - 1]
+            # Normalize delta to be between -pi and pi
+            delta = (delta + np.pi) % (2 * np.pi) - np.pi
+
+            if abs(delta) > max_delta_heading:
+                smoothed_headings[i] = smoothed_headings[i - 1] + np.sign(delta) * max_delta_heading
+
+        return smoothed_headings
+
+    def generate_smooth_trajectory(self, selected_points, headings, resolution=0.3):
+        """
+        Generate a smooth trajectory by interpolating waypoints and headings.
+
+        Args:
+            selected_points (np.ndarray): Nx2 array of waypoints [x, y].
+            headings (np.ndarray): N array of headings (in radians).
+            resolution (float): Desired segment length for smooth trajectory.
+
+        Returns:
+            np.ndarray: Smooth trajectory as an Nx3 array [x, y, heading].
+        """
+        # Calculate cumulative distances along waypoints
+        if selected_points.shape[0] < 2:
+            return np.column_stack(selected_points, headings)
+        segment_lengths = np.sqrt(np.sum(np.diff(selected_points, axis=0)**2, axis=1))
+        cumulative_distances = np.insert(np.cumsum(segment_lengths), 0, 0)
+
+        # Fit a cubic spline for headings
+        heading_spline = CubicSpline(cumulative_distances, headings, bc_type='clamped')
+
+        # Generate smooth distances for the trajectory
+        total_distance = cumulative_distances[-1]
+        smooth_distances = np.linspace(0, total_distance, int(total_distance / resolution))
+
+        # Interpolate smooth positions and headings
+        smooth_x = np.interp(smooth_distances, cumulative_distances, selected_points[:, 0])
+        smooth_y = np.interp(smooth_distances, cumulative_distances, selected_points[:, 1])
+        smooth_headings = heading_spline(smooth_distances)
+
+        # Combine into a single trajectory array
+        smooth_trajectory = np.column_stack((smooth_x, smooth_y, smooth_headings))
+
+        return smooth_trajectory
 
     def planning(self, start, goal, grid_map):
         """

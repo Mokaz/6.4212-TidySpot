@@ -24,7 +24,7 @@ VISUALIZE_GRID_MAP = False
 
 
 class PointCloudMapper(LeafSystem):
-    def __init__(self, station: Diagram, camera_names: List[str], point_clouds, resolution, robot_length=1.3, robot_width=0.7, height_threshold=0.03, meshcat=None):
+    def __init__(self, station: Diagram, camera_names: List[str], point_clouds, resolution, bin_location, bin_size, robot_length=1.3, robot_width=0.7, height_threshold=0.03, meshcat=None):
         LeafSystem.__init__(self)
         self._point_clouds = point_clouds
         self._camera_names = camera_names

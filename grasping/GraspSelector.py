@@ -146,7 +146,7 @@ class GraspSelector(LeafSystem):
             gripper_x_axis = R[:, 0]
             gripper_y_axis = R[:, 1]
 
-            # Compute spot to object vector 
+            # Compute spot to object vector
             spot_to_object_vector = np.append((object_location - spot_location) / np.linalg.norm(object_location - spot_location), [0.0])
 
             # Check alignment with thresholds
@@ -154,7 +154,7 @@ class GraspSelector(LeafSystem):
             spot_to_object_alignment = np.dot(gripper_y_axis, spot_to_object_vector)
 
             if filter_based_on_spot_to_object_vector:
-                if vertical_alignment > vertical_alignment_threshold and spot_to_object_alignment > spot_to_object_vector_alignment_threshold: 
+                if vertical_alignment > vertical_alignment_threshold and spot_to_object_alignment > spot_to_object_vector_alignment_threshold:
                     filter_gg.add(g)
             else:
                 if vertical_alignment > vertical_alignment_threshold:
@@ -165,7 +165,7 @@ class GraspSelector(LeafSystem):
             return None
 
         return filter_gg
-            
+
 
     def visualize_pcd_with_grasps(self, points, colors=None, gg=None):
         import open3d as o3d
