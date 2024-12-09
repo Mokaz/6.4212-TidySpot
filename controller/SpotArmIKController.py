@@ -57,7 +57,7 @@ class SpotArmIKController(LeafSystem):
         self.deposit_pose = None
 
         self.prepick_offset = [0.00, 0, 0.2] # Temp
-        self.pick_offset = [0.00, 0, 0.06]
+        self.pick_offset = [0.00, 0, 0.065]
         self.deposit_height = 0.7
 
         self.gripper_open_angle = -1.0
@@ -292,19 +292,27 @@ class SpotArmIKController(LeafSystem):
                     self.transition_start_time = context.get_time()
 
                 elapsed_time = context.get_time() - self.transition_start_time
-                transition_duration = 3.0  # Time in seconds to complete transition
+                transition_duration = 1  # Time in seconds to complete transition
+                timeout = 3
 
                 if elapsed_time < transition_duration:
                     # Linear interpolation from current position to nominal position
                     alpha = elapsed_time / transition_duration
-                    self._commanded_arm_position = (1 - alpha) * curr_q + alpha * q_nominal_arm
+                    self._commanded_arm_position = (1 - alpha) * curr_q + alpha * q_carry_arm
                     # print(f"Transitioning to carry pose: {self._commanded_arm_position}")
+                elif elapsed_time >= transition_duration + timeout:
+                    print("Gave up on nominal pose. Ready i guess?")
+                    self.transition_start_time = None  # Reset the transition time for future use
+                    state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.IDLE)
+                    state.get_mutable_discrete_state(self._done_grasp).set_value([1])
+                    self.commanded_base_position_input = curr_q
                 else:
-                    if np.allclose(curr_q, q_nominal_arm, atol=0.2) and np.allclose(curr_q_dot, np.zeros(7), atol=0.2):
+                    if np.allclose(curr_q, q_carry_arm, atol=0.3) and np.allclose(curr_q_dot, np.zeros(7), atol=0.3):
                         print("Returned to nominal arm pose. Ready for next mission.")
                         self.transition_start_time = None  # Reset the transition time for future use
                         state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.IDLE)
                         state.get_mutable_discrete_state(self._done_grasp).set_value([1])
+                        self.commanded_base_position_input = curr_q
 
 
             # if controller_state == ControllerState.REACHING_DEPOSIT:

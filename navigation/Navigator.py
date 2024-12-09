@@ -158,6 +158,8 @@ class Navigator(LeafSystem):
                         self.goal[2] = np.arctan2(self.goal[1] - adjusted_goal_position[1], self.goal[0] - adjusted_goal_position[0])
                         self.goal[:2] = adjusted_goal_position
                         # print(f"Adjusted goal position for approach: {self.goal[:2]}")
+                        if self.visualize and self.meshcat:
+                            add_sphere_to_meshcat_xy_plane(self.meshcat, "adjusted_goal", self.goal, radius=0.05, rgba=[0, 0, 1, 1])
                     else:
                         print("Already within approach distance of object. Ending approach.")
                         state.get_mutable_discrete_state(self._navigation_complete).set_value([1])
@@ -175,7 +177,7 @@ class Navigator(LeafSystem):
                 # Check if we've reached the current waypoint
                 distance_to_waypoint = np.linalg.norm(current_waypoint[:2] - current_position[:2])
                 # if we are at the last waypoint, make sure we also match the heading and have more precision on the last point
-                angle_okay = abs(current_position[2] - current_waypoint[2]) < 0.2 # about 10 degrees
+                angle_okay = abs((current_position[2] - current_waypoint[2])% (2*np.pi)) < np.radians(self.max_rotation_degrees) # about 10 degrees
                 threshold = 0.1
                 # iteratively check nodes, since we might satisfy multiple conditions of sequential nodes
                 while distance_to_waypoint < threshold and angle_okay:  # 10cm threshold
@@ -199,6 +201,7 @@ class Navigator(LeafSystem):
                     else:
                         current_waypoint = self.waypoints[self.current_waypoint_idx]
                         distance_to_waypoint = np.linalg.norm(current_waypoint[:2] - current_position[:2])
+                        angle_okay = abs((current_position[2] - current_waypoint[2])% (2*np.pi)) < np.radians(self.max_rotation_degrees) # about 10 degrees
                         # update the map
 
                 # Follow existing trajectory
@@ -218,7 +221,7 @@ class Navigator(LeafSystem):
                         grid_map = np.where(self.grid_map == -1, 0, self.grid_map)  # Replace -1 with 0
 
                     # Inflate obstacles in the grid map
-                    grid_map = binary_dilation(grid_map, iterations=4) # the robot is 1.1m long and 0.5m wide, if we do 2 iterations, obstacles expand to 0.4 around. hopefully this is enough
+                    grid_map = binary_dilation(grid_map, iterations=2) # the robot is 1.1m long and 0.5m wide, if we do 2 iterations, obstacles expand to 0.4 around. hopefully this is enough
 
                 # Use A* to find the path
                 self.goal[:2] = self.check_unoccupied(self.goal[:2], self.grid_map)
@@ -280,9 +283,10 @@ class Navigator(LeafSystem):
                         delta = (delta + np.pi) % (2 * np.pi) - np.pi
                         additional_heading = smoothed_headings[-1] - np.sign(delta) * np.radians(self.max_rotation_degrees)
 
-                        # Add an extra point at the same xy location but with adjusted heading
-                        selected_points = np.vstack((selected_points, selected_points[-1]))
-                        smoothed_headings = np.append(smoothed_headings, additional_heading)
+                        # Add an extra point at the beginning with adjusted heading
+                        selected_points = np.vstack((selected_points[0], selected_points))
+                        smoothed_headings = [(angle - np.sign(delta) *  np.radians(self.max_rotation_degrees)) for angle in smoothed_headings]
+                        smoothed_headings = np.insert(smoothed_headings, 0, headings[0])
 
                     # Combine positions and headings into waypoints
                     self.waypoints = np.column_stack((selected_points, smoothed_headings))
@@ -361,7 +365,7 @@ class Navigator(LeafSystem):
         for i in range(1, len(smoothed_headings)):
             delta = smoothed_headings[i] - smoothed_headings[i - 1]
             # Normalize delta to be between -pi and pi
-            delta = (delta + np.pi) % (2 * np.pi) - np.pi
+            # delta = (delta + np.pi) % (2 * np.pi) - np.pi
 
             if abs(delta) > max_delta_heading:
                 smoothed_headings[i] = smoothed_headings[i - 1] + np.sign(delta) * max_delta_heading

@@ -129,3 +129,9 @@ cameras:
     height: 480
     name: right
     width: 640
+
+
+plant_config:
+    time_step: 1e-3
+    contact_model: "point"
+    discrete_contact_approximation: "sap"

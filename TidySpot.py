@@ -53,7 +53,7 @@ def run_TidySpot(args):
     use_grounded_sam = args.perception_type == "sam"
     device = args.device
     scenario_path = args.scenario
-    automatic_clutter_generation = True
+    automatic_clutter_generation = False
 
     try:
         ### Start the visualizer ###
