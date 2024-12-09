@@ -1,0 +1,110 @@
+directives:
+- add_model:
+    name: ground_plane
+    file: package://TidySpot_objects/ground_plane.sdf
+- add_weld:
+    parent: world
+    child: ground_plane::ground_plane_center
+- add_model:
+    name: north_wall
+    file: package://TidySpot_objects/wall.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: north_wall::wall_bottomcenter
+    X_PC:
+        translation: [4.5, 0, -0.047]
+        rotation: !Rpy { deg: [0, 90, 0]}
+- add_model:
+    name: south_wall
+    file: package://TidySpot_objects/wall.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: south_wall::wall_bottomcenter
+    X_PC:
+        translation: [-5.5, 0, -0.047]
+        rotation: !Rpy { deg: [0, 90, 0]}
+- add_model:
+    name: east_wall
+    file: package://TidySpot_objects/wall.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: east_wall::wall_bottomcenter
+    X_PC:
+        translation: [0, 4.5, -0.047]
+        rotation: !Rpy { deg: [0, 90, 90]}
+- add_model:
+    name: west_wall
+    file: package://TidySpot_objects/wall.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: west_wall::wall_bottomcenter
+    X_PC:
+        translation: [0, -5.5, -0.047]
+        rotation: !Rpy { deg: [0, 90, 90]}
+        
+- add_model:
+    name: planar_bin
+    file: package://TidySpot_objects/big_bin.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: planar_bin::bin_base
+    X_PC:
+        translation: [0, 1.5, 0.0]
+
+- add_model:
+    name: table
+    file: package://TidySpot_objects/table.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: table::table_body_link
+    X_PC:
+        translation: [4.45, 3, 0.0]
+        rotation: !Rpy { deg: [90, 0, 90]}
+
+- add_model:
+    name: chair
+    file: package://TidySpot_objects/chair.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: chair::chair_body_link
+    X_PC:
+        translation: [4, 3, 0.385]
+        rotation: !Rpy { deg: [0, 0, 90]}
+
+- add_model:
+    name: bed
+    file: package://TidySpot_objects/bed.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: bed::bed_body_link
+    X_PC:
+        translation: [-3, 3.95, 0.0]
+        rotation: !Rpy { deg: [0, 0, 90]}
+
+- add_model:
+    name: coffee_table
+    file: package://TidySpot_objects/coffee_table.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: coffee_table::coffee_table_body_link
+    X_PC:
+        translation: [-1.7, 4.5, 0.0]
+
+- add_model:
+    name: couch
+    file: package://TidySpot_objects/couch.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: couch::couch_body_link
+    X_PC:
+        translation: [-4.6, -1, 0.3]
+        rotation: !Rpy { deg: [0, 0, 90]}
+
+- add_model:
+    name: coffee_table2
+    file: package://TidySpot_objects/coffee_table.sdf
+- add_weld:
+    parent: ground_plane::ground_plane_center
+    child: coffee_table2::coffee_table_body_link
+    X_PC:
+        translation: [-4.5, -2.7, 0.0]
