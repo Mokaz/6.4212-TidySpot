@@ -3,7 +3,7 @@
   <model name="square_bin_model">
     <!--
     Cube-shaped bin:
-      Dimensions: 0.80m x 0.80m x 0.50m
+      Dimensions: 0.80m x 0.80m x 0.30m
       Wall thickness: 0.03m
       No slope panel
       Origin at center bottom
@@ -27,13 +27,13 @@
       </inertial>
 
       <!-- FRONT WALL -->
-      <!-- Size: X=0.03 (thickness), Y=0.80 (width), Z=0.50 (height) -->
-      <!-- Position at X=+0.385m, Z=0.25m -->
+      <!-- Size: X=0.03 (thickness), Y=0.80 (width), Z=0.30 (height) -->
+      <!-- Position at X=0.385m, Z=0.15m -->
       <visual name="front_visual">
-        <pose>0.385 0 0.25 0 0 0</pose>
+        <pose>0.385 0 0.15 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.03 0.80 0.50</size>
+            <size>0.03 0.80 0.30</size>
           </box>
         </geometry>
         <material>
@@ -41,10 +41,10 @@
         </material>
       </visual>
       <collision name="front_collision">
-        <pose>0.385 0 0.25 0 0 0</pose>
+        <pose>0.385 0 0.15 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.03 0.80 0.50</size>
+            <size>0.03 0.80 0.30</size>
           </box>
         </geometry>
         <drake:proximity_properties>
@@ -54,12 +54,13 @@
       </collision>
 
       <!-- BACK WALL -->
-      <!-- Position at X=-0.385m, Z=0.25m -->
+      <!-- Size: X=0.03 (thickness), Y=0.80 (width), Z=0.30 (height) -->
+      <!-- Position at X=-0.385m, Z=0.15m -->
       <visual name="back_visual">
-        <pose>-0.385 0 0.25 0 0 0</pose>
+        <pose>-0.385 0 0.15 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.03 0.80 0.50</size>
+            <size>0.03 0.80 0.30</size>
           </box>
         </geometry>
         <material>
@@ -67,10 +68,10 @@
         </material>
       </visual>
       <collision name="back_collision">
-        <pose>-0.385 0 0.25 0 0 0</pose>
+        <pose>-0.385 0 0.15 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.03 0.80 0.50</size>
+            <size>0.03 0.80 0.30</size>
           </box>
         </geometry>
         <drake:proximity_properties>
@@ -80,12 +81,13 @@
       </collision>
 
       <!-- LEFT WALL -->
-      <!-- Now thickness along Y is 0.03. Position at Y=+0.385m, Z=0.25m -->
+      <!-- Size: X=0.80 (width), Y=0.03 (thickness), Z=0.30 (height) -->
+      <!-- Position at Y=0.385m, Z=0.15m -->
       <visual name="left_visual">
-        <pose>0 0.385 0.25 0 0 0</pose>
+        <pose>0 0.385 0.15 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.80 0.03 0.50</size>
+            <size>0.80 0.03 0.30</size>
           </box>
         </geometry>
         <material>
@@ -93,10 +95,10 @@
         </material>
       </visual>
       <collision name="left_collision">
-        <pose>0 0.385 0.25 0 0 0</pose>
+        <pose>0 0.385 0.15 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.80 0.03 0.50</size>
+            <size>0.80 0.03 0.30</size>
           </box>
         </geometry>
         <drake:proximity_properties>
@@ -106,12 +108,13 @@
       </collision>
 
       <!-- RIGHT WALL -->
-      <!-- Position at Y=-0.385m, Z=0.25m -->
+      <!-- Size: X=0.80 (width), Y=0.03 (thickness), Z=0.30 (height) -->
+      <!-- Position at Y=-0.385m, Z=0.15m -->
       <visual name="right_visual">
-        <pose>0 -0.385 0.25 0 0 0</pose>
+        <pose>0 -0.385 0.15 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.80 0.03 0.50</size>
+            <size>0.80 0.03 0.30</size>
           </box>
         </geometry>
         <material>
@@ -119,10 +122,10 @@
         </material>
       </visual>
       <collision name="right_collision">
-        <pose>0 -0.385 0.25 0 0 0</pose>
+        <pose>0 -0.385 0.15 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.80 0.03 0.50</size>
+            <size>0.80 0.03 0.30</size>
           </box>
         </geometry>
         <drake:proximity_properties>
@@ -132,7 +135,7 @@
       </collision>
 
       <!-- BOTTOM -->
-      <!-- Thickness 0.03, center at Z=0.015 -->
+      <!-- Thickness 0.03, center at Z=0.015 (unchanged) -->
       <visual name="bottom_visual">
         <pose>0.0 0.0 0.015 0 0 0</pose>
         <geometry>
@@ -160,9 +163,9 @@
     </link>
 
     <!-- Frame marking the front top center of the bin -->
-    <!-- Now at the front wall (X=0.385), top (Z=0.50), center in Y -->
+    <!-- Now at the front wall (X=0.385), top (Z=0.30), center in Y -->
     <frame name="bin_front_top_center">
-      <pose relative_to="bin_base">0.385 0 0.50 0 0 0</pose>
+      <pose relative_to="bin_base">0.385 0 0.30 0 0 0</pose>
     </frame>
   </model>
 </sdf>
