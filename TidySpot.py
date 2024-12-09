@@ -53,7 +53,7 @@ def run_TidySpot(args):
     use_grounded_sam = args.perception_type == "sam"
     device = args.device
     scenario_path = args.scenario
-    automatic_clutter_generation = True
+    automatic_clutter_generation = False
 
     try:
         ### Start the visualizer ###
@@ -252,8 +252,8 @@ def run_TidySpot(args):
         meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 
         meshcat.StartRecording()
-        simulator.AdvanceTo(40)
-
+        simulator.AdvanceTo(30)
+        print("Simulation has finished.")  # Print a message when the simulation is done
         ################
         ### TESTZONE ###
         ################

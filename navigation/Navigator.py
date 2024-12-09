@@ -242,7 +242,7 @@ class Navigator(LeafSystem):
                         grid_map = np.where(self.grid_map == -1, 0, self.grid_map)  # Replace -1 with 0
 
                     # Inflate obstacles in the grid map
-                    grid_map = binary_dilation(grid_map, iterations=3) # the robot is 1.1m long and 0.5m wide, if we do 2 iterations, obstacles expand to 0.4 around. hopefully this is enough
+                    grid_map = binary_dilation(grid_map, iterations=2) # the robot is 1.1m long and 0.5m wide, if we do 2 iterations, obstacles expand to 0.4 around. hopefully this is enough
 
                 # Use A* to find the path
                 self.goal[:2] = self.check_unoccupied(self.goal[:2], self.grid_map)
