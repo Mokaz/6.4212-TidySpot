@@ -294,7 +294,11 @@ def clutter_gen(num_items: int, spawn_area: Tuple[float, float], goal_file: str,
     default_free_body_pose:
         {ycb_bases[object_num]}:
             translation: [{x_pos}, {y_pos}, 2]"""
-        yaml_content += """
+        if object_num == 3:
+            yaml_content += """
+            rotation: !Rpy { deg: [0, 0, 0]}"""
+        else:
+            yaml_content += """
             rotation: !Rpy { deg: [90, 180, 0]}"""
 
     # Step 3: Write the modified content to the goal file
