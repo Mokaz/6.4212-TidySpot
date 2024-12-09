@@ -64,6 +64,7 @@ class SpotArmIKController(LeafSystem):
         self.deposit_height = 0.7
 
         self.gripper_open_angle = -1.0
+        self.gripper_close_angle = -0.05
         self.gripper_close_duration = 1.0
 
         self.gripper_close_start_time = 0.0
@@ -228,7 +229,11 @@ class SpotArmIKController(LeafSystem):
 
                     self.gripper_close_start_time = context.get_time()
                     self.gripper_close_end_time = self.gripper_close_start_time + self.gripper_close_duration
-                    self._added_gripper_force[-1] = 20.0
+                    elapsed_time = context.get_time() - self.gripper_close_start_time
+                    alpha = elapsed_time / self.gripper_close_duration
+                    gripper_angle = (1-alpha)*curr_q[6] + alpha*self.gripper_close_angle
+                    self._commanded_arm_position[6] = gripper_angle
+                    self._added_gripper_force[-1] = alpha * 10.0
                     state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.CLOSING_GRIPPER)
                     self.prev_gripper_position = curr_q[6]
 
@@ -242,6 +247,12 @@ class SpotArmIKController(LeafSystem):
                 #     # print("Commanded Arm Position: ", np.round(self._commanded_arm_position, 4))
                 #     # print("Difference: ", np.round(np.abs(curr_q - self._commanded_arm_position), 4))
                 #     self._last_print_time = context.get_time()
+                elapsed_time = context.get_time() - self.gripper_close_start_time
+                alpha = elapsed_time / self.gripper_close_duration
+                gripper_angle = (1-alpha)*curr_q[6] + alpha*self.gripper_close_angle
+                self._commanded_arm_position[6] = gripper_angle
+                self._added_gripper_force[-1] = alpha * 10.0
+               
                 is_gripper_closed = np.abs(curr_q[6] - self.prev_gripper_position) < 0.01
                 self.prev_gripper_position = curr_q[6]
                 if context.get_time() > self.gripper_close_end_time or is_gripper_closed:
