@@ -55,11 +55,11 @@ def run_TidySpot(args):
     scenario_path = args.scenario
     automatic_clutter_generation = True
 
-    # Parameter override for testing 
-    use_anygrasp = True
-    use_grounded_sam = False
-    device = "cuda"
-    scenario_path = "objects/added_object_directives.yaml"
+    # Parameter override for testing
+    # use_anygrasp = True
+    # use_grounded_sam = False
+    # device = "cuda"
+    # scenario_path = "objects/added_object_directives.yaml"
 
     try:
         ### Start the visualizer ###
@@ -128,7 +128,7 @@ def run_TidySpot(args):
         ### PLANNER ###
 
         # Add point cloud mapper for path planner
-        point_cloud_mapper = builder.AddSystem(PointCloudMapper(station, camera_names, to_point_cloud, resolution=0.1,  meshcat=meshcat))
+        point_cloud_mapper = builder.AddSystem(PointCloudMapper(station, camera_names, to_point_cloud, bin_location=bin_location, bin_size=(4,4), resolution=0.1,  meshcat=meshcat))
         point_cloud_mapper.set_name("point_cloud_mapper")
         point_cloud_mapper.connect_components(point_cloud_cropper, station, builder)
 
@@ -256,7 +256,7 @@ def run_TidySpot(args):
         meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 
         meshcat.StartRecording()
-        simulator.AdvanceTo(30)
+        simulator.AdvanceTo(20)
 
         ################
         ### TESTZONE ###
