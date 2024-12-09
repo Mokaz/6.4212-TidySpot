@@ -1,14 +1,18 @@
 <?xml version="1.0"?>
 <sdf version="1.7">
-  <model name="bin_model">
+  <model name="square_bin_model">
     <!--
+    Cube-shaped bin:
+      Dimensions: 0.80m x 0.80m x 0.50m
+      Wall thickness: 0.03m
+      No slope panel
+      Origin at center bottom
     Axes:
-      +X - Pointing towards front (slope)
-      +Y - Pointing to left side
-      +Z - Up
-    Origin:
-      (0, 0, 0) at the center bottom of the bin
+      +X: Front
+      +Y: Left
+      +Z: Up
     -->
+
     <link name="bin_base">
       <inertial>
         <mass>18.70</mass>
@@ -21,22 +25,26 @@
           <izz>1.2</izz>
         </inertia>
       </inertial>
-      <visual name="visual">
-        <pose>0.22 0 0.105 0 0 0</pose>
+
+      <!-- FRONT WALL -->
+      <!-- Size: X=0.03 (thickness), Y=0.80 (width), Z=0.50 (height) -->
+      <!-- Position at X=+0.385m, Z=0.25m -->
+      <visual name="front_visual">
+        <pose>0.385 0 0.25 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.05 0.63 0.21</size>
+            <size>0.03 0.80 0.50</size>
           </box>
         </geometry>
         <material>
           <diffuse>0.9 0.9 0.9 1.0</diffuse>
         </material>
       </visual>
-      <collision name="front">
-        <pose>0.22 0 0.105 0 0 0</pose>
+      <collision name="front_collision">
+        <pose>0.385 0 0.25 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.05 0.63 0.21</size>
+            <size>0.03 0.80 0.50</size>
           </box>
         </geometry>
         <drake:proximity_properties>
@@ -44,22 +52,25 @@
           <drake:hydroelastic_modulus>1.0e6</drake:hydroelastic_modulus>
         </drake:proximity_properties>
       </collision>
-      <visual name="slope">
-        <pose>0.182 0 0.102 0 0.35 0</pose>
+
+      <!-- BACK WALL -->
+      <!-- Position at X=-0.385m, Z=0.25m -->
+      <visual name="back_visual">
+        <pose>-0.385 0 0.25 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.05 0.63 0.21</size>
+            <size>0.03 0.80 0.50</size>
           </box>
         </geometry>
         <material>
           <diffuse>0.9 0.9 0.9 1.0</diffuse>
         </material>
       </visual>
-      <collision name="slope">
-        <pose>0.182 0 0.102 0 0.35 0</pose>
+      <collision name="back_collision">
+        <pose>-0.385 0 0.25 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.05 0.63 0.21</size>
+            <size>0.03 0.80 0.50</size>
           </box>
         </geometry>
         <drake:proximity_properties>
@@ -67,22 +78,25 @@
           <drake:hydroelastic_modulus>1.0e6</drake:hydroelastic_modulus>
         </drake:proximity_properties>
       </collision>
-      <visual name="back">
-        <pose>-0.22 0 0.105 0 0 0</pose>
+
+      <!-- LEFT WALL -->
+      <!-- Now thickness along Y is 0.03. Position at Y=+0.385m, Z=0.25m -->
+      <visual name="left_visual">
+        <pose>0 0.385 0.25 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.05 0.63 0.21</size>
+            <size>0.80 0.03 0.50</size>
           </box>
         </geometry>
         <material>
           <diffuse>0.9 0.9 0.9 1.0</diffuse>
         </material>
       </visual>
-      <collision name="back">
-        <pose>-0.22 0 0.105 0 0 0</pose>
+      <collision name="left_collision">
+        <pose>0 0.385 0.25 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.05 0.63 0.21</size>
+            <size>0.80 0.03 0.50</size>
           </box>
         </geometry>
         <drake:proximity_properties>
@@ -90,22 +104,25 @@
           <drake:hydroelastic_modulus>1.0e6</drake:hydroelastic_modulus>
         </drake:proximity_properties>
       </collision>
-      <visual name="left">
-        <pose>0 0.29 0.105 0 0 0</pose>
+
+      <!-- RIGHT WALL -->
+      <!-- Position at Y=-0.385m, Z=0.25m -->
+      <visual name="right_visual">
+        <pose>0 -0.385 0.25 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.49 0.05 0.21</size>
+            <size>0.80 0.03 0.50</size>
           </box>
         </geometry>
         <material>
           <diffuse>0.9 0.9 0.9 1.0</diffuse>
         </material>
       </visual>
-      <collision name="left">
-        <pose>0 0.29 0.105 0 0 0</pose>
+      <collision name="right_collision">
+        <pose>0 -0.385 0.25 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.49 0.05 0.21</size>
+            <size>0.80 0.03 0.50</size>
           </box>
         </geometry>
         <drake:proximity_properties>
@@ -113,22 +130,25 @@
           <drake:hydroelastic_modulus>1.0e6</drake:hydroelastic_modulus>
         </drake:proximity_properties>
       </collision>
-      <visual name="right">
-        <pose>0 -0.29 0.105 0 0 0</pose>
+
+      <!-- BOTTOM -->
+      <!-- Thickness 0.03, center at Z=0.015 -->
+      <visual name="bottom_visual">
+        <pose>0.0 0.0 0.015 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.49 0.05 0.21</size>
+            <size>0.80 0.80 0.03</size>
           </box>
         </geometry>
         <material>
           <diffuse>0.9 0.9 0.9 1.0</diffuse>
         </material>
       </visual>
-      <collision name="right">
-        <pose>0 -0.29 0.105 0 0 0</pose>
+      <collision name="bottom_collision">
+        <pose>0.0 0.0 0.015 0 0 0</pose>
         <geometry>
           <box>
-            <size>0.49 0.05 0.21</size>
+            <size>0.80 0.80 0.03</size>
           </box>
         </geometry>
         <drake:proximity_properties>
@@ -136,32 +156,13 @@
           <drake:hydroelastic_modulus>1.0e6</drake:hydroelastic_modulus>
         </drake:proximity_properties>
       </collision>
-      <visual name="bottom">
-        <pose>0.0 0.0 0.0075 0 0 0</pose>
-        <geometry>
-          <box>
-            <size>0.49 0.63 0.015</size>
-          </box>
-        </geometry>
-        <material>
-          <diffuse>0.9 0.9 0.9 1.0</diffuse>
-        </material>
-      </visual>
-      <collision name="bottom">
-        <pose>0.0 0.0 0.0075 0 0 0</pose>
-        <geometry>
-          <box>
-            <size>0.49 0.63 0.015</size>
-          </box>
-        </geometry>
-        <drake:proximity_properties>
-          <drake:compliant_hydroelastic/>
-          <drake:hydroelastic_modulus>1.0e6</drake:hydroelastic_modulus>
-        </drake:proximity_properties>
-      </collision>
+
     </link>
+
+    <!-- Frame marking the front top center of the bin -->
+    <!-- Now at the front wall (X=0.385), top (Z=0.50), center in Y -->
     <frame name="bin_front_top_center">
-      <pose relative_to="bin_base">0.22 0 0.21 0 0 0</pose>
+      <pose relative_to="bin_base">0.385 0 0.50 0 0 0</pose>
     </frame>
   </model>
 </sdf>

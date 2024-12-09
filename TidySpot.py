@@ -55,12 +55,6 @@ def run_TidySpot(args):
     scenario_path = args.scenario
     automatic_clutter_generation = True
 
-    # Parameter override for testing
-    # use_anygrasp = True
-    # use_grounded_sam = False
-    # device = "cuda"
-    # scenario_path = "objects/added_object_directives.yaml"
-
     try:
         ### Start the visualizer ###
         meshcat = StartMeshcat()

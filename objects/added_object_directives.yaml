@@ -72,7 +72,7 @@ directives:
     parent: ground_plane::ground_plane_center
     child: planar_bin::bin_base
     X_PC:
-        translation: [0, 1.5, 0.1]
+        translation: [0, 1.5, 0.0]
 # - add_model:
 #     name: table
 #     file: package://TidySpot_objects/table.sdf
