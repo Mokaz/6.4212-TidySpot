@@ -359,6 +359,15 @@ class PointCloudMapper(LeafSystem):
                 if 0 <= x < self.grid_map.shape[0] and 0 <= y < self.grid_map.shape[1]:
                     self.grid_map[x, y] = 1  # Mark as obstacle
 
+        # Mark immediate surrounding cells as free space
+        for dx in range(-(half_width_cells + 1), half_width_cells + 2):
+            for dy in range(-(half_length_cells + 1), half_length_cells + 2):
+                x = bin_center_grid_x + dx
+                y = bin_center_grid_y + dy
+                if 0 <= x < self.grid_map.shape[0] and 0 <= y < self.grid_map.shape[1]:
+                    if self.grid_map[x, y] != 1:  # Only mark as free space if not already an obstacle
+                        self.grid_map[x, y] = 0  # Mark as free space
+
     def visualize_grid_map(self):
         """
         Visualizes the current grid map using matplotlib.
