@@ -1,0 +1,36 @@
+directives:
+- add_model:
+    name: obj_0
+    file: package://manipulation/hydro/010_potted_meat_can.sdf
+    default_free_body_pose:
+        base_link_meat:
+            translation: [-1.7870517413055624, 1.3932078856870156, 0.0]
+            rotation: !Rpy { deg: [90, 180, 0]}
+- add_model:
+    name: obj_1
+    file: package://manipulation/hydro/010_potted_meat_can.sdf
+    default_free_body_pose:
+        base_link_meat:
+            translation: [0.8692321955361528, 2.951405810503408, 0.0]
+            rotation: !Rpy { deg: [90, 180, 0]}
+- add_model:
+    name: obj_2
+    file: package://manipulation/hydro/005_tomato_soup_can.sdf
+    default_free_body_pose:
+        base_link_soup:
+            translation: [2.786149254792874, -1.8971219712663718, 0.0]
+            rotation: !Rpy { deg: [90, 180, 0]}
+- add_model:
+    name: obj_3
+    file: package://manipulation/hydro/006_mustard_bottle.sdf
+    default_free_body_pose:
+        base_link_mustard:
+            translation: [1.0980908054484377, 2.7935655022081747, 0.0]
+            rotation: !Rpy { deg: [0, 0, 0]}
+- add_model:
+    name: obj_4
+    file: package://manipulation/hydro/010_potted_meat_can.sdf
+    default_free_body_pose:
+        base_link_meat:
+            translation: [1.6410085918418247, 2.781866114997589, 0.0]
+            rotation: !Rpy { deg: [90, 180, 0]}

@@ -50,7 +50,7 @@ class AntipodalGraspHandler:
             V = eigenvectors[:, np.argsort(eigenvalues)[::-1]]
 
             v_1 = V[:, 0] if V[:, 0].dot(normals[:, index]) < 0 else -V[:, 0]
-            R = np.column_stack((V[:, 1], v_1, V[:, 2]))
+            R = np.column_stack((V[:, 1],  V[:, 2], v_1))
             R = R @ np.diag([1, 1, np.linalg.det(R)])
             frames.append(RigidTransform(RotationMatrix(R), query))
         return frames
@@ -173,6 +173,9 @@ class AntipodalGraspHandler:
         return sdf > 0
 
     def run_grasp(self, pcd, context, visualize=False):
+        if pcd.size() == 0:
+            print("No points in point cloud.")
+            return None
         candidate_grasps = self.compute_candidate_grasps(pcd, context, candidate_num=1)
 
         if not candidate_grasps:

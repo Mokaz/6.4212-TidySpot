@@ -60,26 +60,9 @@ class PointCloudMapper(LeafSystem):
         self.bin_size = bin_size
         self.mark_bin_as_obstacle()
 
-    def MarkObjectClusterAsAttempted(self, context: Context, input: AbstractValue):
-        cluster_centroid = input.get_value()[0]
-        # loop through the object clusters and find the one that matches the world centroid
-        # TODO: instead of this, use the id
-        for cluster_id, cluster in self.object_clusters.items():
-            if cluster["centroid"]["world"] == cluster_centroid:
-                cluster["attempted_grasp"] = True
-                break
-
 
     def CalcObjectClusters(self, context: Context, output: AbstractValue):
-        # Set the output to the current object clusters
-        # instead of returning them all, we will return one that hasn't been grasp attempted
         output.set_value(self.object_clusters)
-        # for cluster_id, cluster in self.object_clusters.items():
-        #     if not cluster["attempted_grasp"]:
-        #         output.set_value(cluster)
-        #         return
-
-        # output.set_value(self.object_clusters.get(1, {}))
 
     def CalcGridMap(self, context: Context, output: AbstractValue):
         self.robot_state = self.GetInputPort("spot.state_estimated").Eval(context)

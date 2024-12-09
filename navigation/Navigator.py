@@ -88,7 +88,7 @@ class Navigator(LeafSystem):
         self.current_waypoint_idx = 0
         self.goal = None
         self.iters_at_current_waypoint = 0
-        self.max_iters_at_current_waypoint = 10
+        self.max_iters_at_current_waypoint = 5
         self.bin_location = bin_location
 
         # Periodic update for trajectory generation
@@ -100,7 +100,7 @@ class Navigator(LeafSystem):
         self.inflate_obstacles = True
         self.allow_unknown_pathing = True
         self.goal_object_location = None
-        self.max_rotation_degrees = 10
+        self.max_rotation_degrees = 6
         self.grid_map = np.zeros((100, 100))
         self.hijacked_goal = None
 
@@ -226,6 +226,7 @@ class Navigator(LeafSystem):
                 new_waypoints = self.find_nearest_free_space_with_heading(current_position, self.grid_map)
                 self.waypoints = new_waypoints
                 self.current_waypoint_idx = 0
+                desired_position = self.waypoints[self.current_waypoint_idx]
                 self.iters_at_current_waypoint = 0
 
             elif self.waypoints is None:
@@ -241,8 +242,18 @@ class Navigator(LeafSystem):
                     if self.allow_unknown_pathing:
                         grid_map = np.where(self.grid_map == -1, 0, self.grid_map)  # Replace -1 with 0
 
+                    # Create a mask for elements with value 1
+                    mask_ones = (grid_map == 1)
+
+                    # Dilate only the elements with value 1
+                    dilated_ones = binary_dilation(mask_ones, iterations=2)
+
+                    # Combine the dilated ones back into the grid map, keeping values of 2 intact
+                    grid_map = np.where(dilated_ones, 1, grid_map)  # Set the dilated areas to 1
                     # Inflate obstacles in the grid map
-                    grid_map = binary_dilation(grid_map, iterations=2) # the robot is 1.1m long and 0.5m wide, if we do 2 iterations, obstacles expand to 0.4 around. hopefully this is enough
+                    # grid_map = binary_dilation(grid_map, iterations=2) # the robot is 1.1m long and 0.5m wide, if we do 2 iterations, obstacles expand to 0.4 around. hopefully this is enough
+                    # Mark the current robot location as free space
+                    grid_map[self.calc_xy_index(current_position[0], self.grid_size[1] // 2), self.calc_xy_index(current_position[1], self.grid_size[0] // 2)] = 0
 
                 # Use A* to find the path
                 self.goal[:2] = self.check_unoccupied(self.goal[:2], self.grid_map)
@@ -409,11 +420,22 @@ class Navigator(LeafSystem):
             # Create waypoints moving away in the same heading direction
             waypoints = []
             for i in range(1, 6):  # Create 5 waypoints at 0.1m intervals
-                new_position = current_world + direction * i * 0.1
+                new_position = current_world + direction * i * 0.05
                 waypoints.append([new_position[0], new_position[1], current_position[2]])
 
             if self.visualize and self.meshcat:
                 add_sphere_to_meshcat_xy_plane(self.meshcat, "stuck replan", waypoints[-1], radius=0.02, rgba=[0.5, 0, 1, 1])
+                # Draw red spheres at each waypoint
+                for i, point in enumerate(waypoints):
+                    self.meshcat.SetObject(
+                        f"replan_path/point_{i}",
+                        Sphere(radius=0.01),
+                        Rgba(0.5, 0, 1, 1)
+                    )
+                    self.meshcat.SetTransform(
+                        f"replan_path/point_{i}",
+                        RigidTransform([point[0], point[1], 0])
+                    )
 
             return np.array(waypoints)
 

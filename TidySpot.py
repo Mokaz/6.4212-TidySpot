@@ -82,7 +82,7 @@ def run_TidySpot(args):
         scenario = AppendDirectives(scenario, filename=scenario_path)
         if automatic_clutter_generation:
             forbidden_areas = [((1.5, 1.5), (-1.5, -1.5))]
-            clutter_path = clutter_gen(5, (3.0, 3.0), "objects/clutter.yaml", forbidden_areas)
+            clutter_path = clutter_gen(3, (3.0, 3.0), "objects/clutter.yaml", forbidden_areas)
             scenario = AppendDirectives(scenario, filename=clutter_path)
 
         # Get bin location from scenario (assuming bin link is welded to world)
@@ -129,7 +129,7 @@ def run_TidySpot(args):
         point_cloud_mapper.connect_components(point_cloud_cropper, station, builder)
 
         # Add path planner and mapper
-        navigator = builder.AddSystem(Navigator(station, builder, np.array([0,0,0]), resolution=0.1, bin_location=bin_location, meshcat=meshcat, visualize=True))
+        navigator = builder.AddSystem(Navigator(station, builder, np.array([0,0,0]), resolution=0.1, bin_location=bin_location, meshcat=meshcat, visualize=False))
         navigator.set_name("navigator")
         navigator.connect_mapper(point_cloud_mapper, station, builder)
 
@@ -137,7 +137,7 @@ def run_TidySpot(args):
 
         # Add IK controller for to solve arm positions for grasping
         spot_plant = station.GetSubsystemByName("spot.controller").get_multibody_plant_for_control()
-        spot_arm_ik_controller = builder.AddSystem(SpotArmIKController(plant, spot_plant, bin_location, meshcat=meshcat))
+        spot_arm_ik_controller = builder.AddSystem(SpotArmIKController(plant, spot_plant, bin_location, meshcat=meshcat, use_anygrasp=use_anygrasp))
         spot_arm_ik_controller.set_name("spot_arm_ik_controller")
         spot_arm_ik_controller.connect_components(builder, station, navigator, grasp_selector)
 
@@ -247,12 +247,12 @@ def run_TidySpot(args):
             # times.append(context.get_time())
 
         # simulator.set_monitor(PrintStates)
-        simulator.set_monitor(visualize_controller_poses_and_debug)
+        # simulator.set_monitor(visualize_controller_poses_and_debug)
 
         meshcat.Flush()  # Wait for the large object meshes to get to meshcat.
 
         meshcat.StartRecording()
-        simulator.AdvanceTo(30)
+        simulator.AdvanceTo(15)
         print("Simulation has finished.")  # Print a message when the simulation is done
         ################
         ### TESTZONE ###

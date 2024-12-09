@@ -43,10 +43,9 @@ directives:
         rotation: !Rpy { deg: [0, 90, 90]}
 - add_model:
     name: planar_bin
-    file: package://TidySpot_objects/big_bin.sdf
+    file: package://TidySpot_objects/bin.sdf
 - add_weld:
     parent: ground_plane::ground_plane_center
     child: planar_bin::bin_base
     X_PC:
         translation: [0, 1.5, 0.1]
-            

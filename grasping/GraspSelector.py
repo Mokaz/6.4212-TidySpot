@@ -72,11 +72,11 @@ class GraspSelector(LeafSystem):
             colors = None
 
         points = points[valid_mask]
-        max_z = np.max(points[:, 2])
-
         if points.shape[0] == 0:
             print("SelectGrasp: No points in the specified limits.")
             return
+        max_z = np.max(points[:, 2])
+
 
         # if self.visualize:
         #     self.meshcat.SetObject("cropped_point_cloud", point_cloud, point_size=0.01)
@@ -102,7 +102,7 @@ class GraspSelector(LeafSystem):
                 self.visualize_pcd_with_single_grasp(points, gg[0], colors)
 
             g_best = gg[0]
-            
+
             if g_best.translation[2] < max_z - 0.05:
                 g_best.translation[2] = max_z - 0.05
 
