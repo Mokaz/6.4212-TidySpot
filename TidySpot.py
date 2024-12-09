@@ -53,6 +53,7 @@ def run_TidySpot(args):
     use_grounded_sam = args.perception_type == "sam"
     device = args.device
     scenario_path = args.scenario
+    automatic_clutter_generation = True
 
     # Parameter override for testing 
     use_anygrasp = True
@@ -84,6 +85,9 @@ def run_TidySpot(args):
                 image_size = (camera_config.width, camera_config.height)
 
         ### Add objects to scene ###
+        if automatic_clutter_generation:
+            forbidden_areas = [((1.5, 1.5), (-1.5, -1.5))]
+            scenario_path = clutter_gen(5, (3.0, 3.0), scenario_path, "objects/cluttered_scene.yaml", forbidden_areas)
         scenario = AppendDirectives(scenario, filename=scenario_path)
 
         # Get bin location from scenario (assuming bin link is welded to world)
