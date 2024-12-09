@@ -79,10 +79,11 @@ def run_TidySpot(args):
                 image_size = (camera_config.width, camera_config.height)
 
         ### Add objects to scene ###
+        scenario = AppendDirectives(scenario, filename=scenario_path)
         if automatic_clutter_generation:
             forbidden_areas = [((1.5, 1.5), (-1.5, -1.5))]
-            scenario_path = clutter_gen(5, (3.0, 3.0), scenario_path, "objects/cluttered_scene.yaml", forbidden_areas)
-        scenario = AppendDirectives(scenario, filename=scenario_path)
+            clutter_path = clutter_gen(5, (3.0, 3.0), "objects/clutter.yaml", forbidden_areas)
+            scenario = AppendDirectives(scenario, filename=clutter_path)
 
         # Get bin location from scenario (assuming bin link is welded to world)
         bin_location = get_bin_translation(scenario, bin_link_name="planar_bin::bin_base")
