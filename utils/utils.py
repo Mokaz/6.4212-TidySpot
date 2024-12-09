@@ -243,53 +243,46 @@ def convert_to_world_coordinates(ix: int, iy: int, resolution: float, shape: Tup
     y = (iy - (shape[1] // 2)) * resolution
     return x, y
 
-def clutter_gen(num_items: int, spawn_area: Tuple[float, float], scene_file: str, goal_file: str, forbidden_areas: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []):
-    ycb = ["003_cracker_box.sdf", "004_sugar_box.sdf", "005_tomato_soup_can.sdf",
+def clutter_gen(num_items: int, spawn_area: Tuple[float, float], goal_file: str, forbidden_areas: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []):
+    ycb = ["003_cracker_box.sdf", "004_sugar_box.sdf", "005_tomato_soup_can.sdf", 
            "006_mustard_bottle.sdf", "009_gelatin_box.sdf", "010_potted_meat_can.sdf"]
-    ycb_bases = ["base_link_cracker", "base_link_sugar", "base_link_soup",
+    ycb_bases = ["base_link_cracker", "base_link_sugar", "base_link_soup", 
                  "base_link_mustard", "base_link_gelatin", "base_link_meat"]
-
+    
     # Step 0: Check if we are in the right directory
     current_directory = os.getcwd()
     if not current_directory.endswith("6.4212_TidySpot"):
-        scene_path = os.path.join("6.4212_TidySpot", scene_file)
         goal_path = os.path.join("6.4212_TidySpot", goal_file)
-    else:
-        scene_path = scene_file
+    else: 
         goal_path = goal_file
 
-    # Step 1: Read the original YAML file
-    try:
-        with open(scene_path, 'r') as file:
-            yaml_content = file.read()
-    except FileNotFoundError:
-        print(f"Error: The file {scene_path} was not found.")
-        return
+    # Step 1: Generate empty yaml
+    yaml_content = "directives:"
 
     # Step 2: Generate random positions, avoiding forbidden rectangular areas
     rng = random.Random()  # Initialize a random generator
     for i in range(num_items):
         object_num = rng.randint(0, len(ycb) - 1)
-
+        
         # Generate a position and check if it's within any forbidden rectangular area
         in_forbidden_area = True
         while in_forbidden_area:
             in_forbidden_area = False
             x_pos = rng.uniform(-spawn_area[0], spawn_area[0])
             y_pos = rng.uniform(-spawn_area[1], spawn_area[1])
-
+            
             # Check if the position is in any forbidden rectangular area
             for (corner1, corner2) in forbidden_areas:
                 x_min = min(corner1[0], corner2[0])
                 x_max = max(corner1[0], corner2[0])
                 y_min = min(corner1[1], corner2[1])
                 y_max = max(corner1[1], corner2[1])
-
+                
                 # Check if (x_pos, y_pos) is within the rectangle
                 if x_min <= x_pos <= x_max and y_min <= y_pos <= y_max:
                     in_forbidden_area = True
                     break
-
+            
             # If not in a forbidden area, proceed
             if not in_forbidden_area:
                 break
@@ -301,6 +294,8 @@ def clutter_gen(num_items: int, spawn_area: Tuple[float, float], scene_file: str
     default_free_body_pose:
         {ycb_bases[object_num]}:
             translation: [{x_pos}, {y_pos}, 2]"""
+        yaml_content += """
+            rotation: !Rpy { deg: [90, 180, 0]}"""
 
     # Step 3: Write the modified content to the goal file
     with open(goal_path, 'w') as file:
