@@ -194,10 +194,10 @@ class SpotArmIKController(LeafSystem):
 
                 except AssertionError as e:
                     print(f"AssertionError caught: {e}")
-                    if self.num_attempts < 10:
-                        self.num_attempts = 0
-                        state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.MOVE_TO_CARRY_POSE)
-                        print("Gave up on grasp. Moving to carry pose to reset.")
+                    # if self.num_attempts < 100:
+                    #     self.num_attempts = 0
+                    #     state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.MOVE_TO_CARRY_POSE)
+                    #     print("Gave up on grasp. Moving to carry pose to reset.")
 
             if controller_state == ControllerState.REACHING_PREPICK:
                 # print("Current Arm Position: ", curr_q)
@@ -228,10 +228,10 @@ class SpotArmIKController(LeafSystem):
 
                     except AssertionError as e:
                         print(f"AssertionError caught: {e}")
-                        if self.num_attempts < 10:
-                            self.num_attempts = 0
-                            state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.MOVE_TO_CARRY_POSE)
-                            print("Gave up on grasp. Moving to carry pose to reset.")
+                        # if self.num_attempts < 100:
+                        #     self.num_attempts = 0
+                        #     state.get_mutable_abstract_state(int(self._controller_state)).set_value(ControllerState.MOVE_TO_CARRY_POSE)
+                        #     print("Gave up on grasp. Moving to carry pose to reset.")
 
             if controller_state == ControllerState.REACHING_PICK:
                 # if DEBUG and context.get_time() - self._last_print_time > 0.3:
