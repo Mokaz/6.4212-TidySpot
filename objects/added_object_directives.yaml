@@ -42,6 +42,30 @@ directives:
         translation: [0, -5.5, -0.047]
         rotation: !Rpy { deg: [0, 90, 90]}
 - add_model:
+#     name: obj_mustard1
+#     file: package://manipulation/hydro/061_foam_brick.sdf
+#     default_free_body_pose:
+#         base_link:
+#             translation: [1.5, 3, 0.1]
+# - add_model:
+#     name: obj_mustard2
+#     file: package://manipulation/hydro/061_foam_brick.sdf
+#     default_free_body_pose:
+#         base_link:
+#             translation: [2, 0, 0.1]
+# - add_model:
+#     name: obj_mustard3
+#     file: package://manipulation/hydro/061_foam_brick.sdf
+#     default_free_body_pose:
+#         base_link:
+#             translation: [-0.1, -1.4, 0.1]
+# - add_model:
+#     name: obj_brick1
+#     file: package://manipulation/hydro/061_foam_brick.sdf
+#     default_free_body_pose:
+#         base_link:
+#             translation: [1.5, 0, 0.1]
+#             rotation: !Rpy { deg: [0, 90, 0]}
     name: obj_mustard1
     file: package://manipulation/hydro/006_mustard_bottle.sdf
     default_free_body_pose:
@@ -58,13 +82,14 @@ directives:
     file: package://manipulation/hydro/006_mustard_bottle.sdf
     default_free_body_pose:
         base_link_mustard:
-            translation: [-1, -1, 0.1]
+            translation: [-0.1, -1.4, 0.1]
 - add_model:
     name: obj_mustard4
     file: package://manipulation/hydro/006_mustard_bottle.sdf
     default_free_body_pose:
         base_link_mustard:
             translation: [1.5, 0, 0.1]
+            # rotation: !Rpy { deg: [0, 90, 0]}
 - add_model:
     name: planar_bin
     file: package://TidySpot_objects/bin.sdf
