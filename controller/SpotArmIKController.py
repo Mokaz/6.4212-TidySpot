@@ -75,6 +75,7 @@ class SpotArmIKController(LeafSystem):
         self._last_solve = 0.0
         self._curr_solved_flag = 0
 
+        self.transition_start_time = None
         self.resetPID = False
 
         # Input ports
@@ -160,6 +161,10 @@ class SpotArmIKController(LeafSystem):
         #     self._commanded_arm_position = curr_q
         if controller_mission == ControllerMission.PICK:
             if controller_state == ControllerState.IDLE:
+                if self.transition_start_time is None:
+                    self.transition_start_time = context.get_time()
+                if context.get_time() < self.transition_start_time + 2.0:
+                    return
                 print("Solving IK to transition to REACHING_PREPICK")
                 self.desired_gripper_pose = self.desired_gripper_pose_input.Eval(context)
                 desired_gripper_pose_is_default = np.allclose(self.desired_gripper_pose.rotation().matrix(), np.eye(3)) and np.allclose(self.desired_gripper_pose.translation(), np.zeros(3))
@@ -173,7 +178,7 @@ class SpotArmIKController(LeafSystem):
                     q = solve_ik(
                         plant=self._spotplant,
                         X_WT=self.prepick_pose,
-                        base_position=commanded_base_position,
+                        base_position=curr_base_position,
                         fix_base=True,
                         max_iter=20,
                         q_current=curr_q,
@@ -199,7 +204,7 @@ class SpotArmIKController(LeafSystem):
                         q = solve_ik(
                             plant=self._spotplant,
                             X_WT=self.desired_gripper_pose,
-                            base_position=commanded_base_position,
+                            base_position=curr_base_position,
                             fix_base=True,
                             max_iter=20,
                             q_current=curr_q,
