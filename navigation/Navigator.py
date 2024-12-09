@@ -32,7 +32,7 @@ from pydrake.all import (
     Rgba,
 )
 from enum import Enum, auto
-from scipy.ndimage import binary_dilation
+from scipy.ndimage import binary_dilation, binary_erosion
 from utils.utils import (
     add_sphere_to_meshcat_xy_plane,
     convert_to_grid_coordinates,
@@ -45,7 +45,7 @@ class NavigationState(Enum):
     MOVE_NEAR_OBJECT = auto()
 
 class Navigator(LeafSystem):
-    def __init__(self, station, builder, initial_position, resolution, robot_length=1.3, robot_width=0.7, time_step=0.1, meshcat=None, visualize=False):
+    def __init__(self, station, builder, initial_position, resolution, bin_location, robot_length=1.3, robot_width=0.7, time_step=0.1, meshcat=None, visualize=False):
         """
         Initialize grid map for A* planning and smooth trajectory generation.
 
@@ -88,7 +88,8 @@ class Navigator(LeafSystem):
         self.current_waypoint_idx = 0
         self.goal = None
         self.iters_at_current_waypoint = 0
-        self.max_iters_at_current_waypoint = 10
+        self.max_iters_at_current_waypoint = 60
+        self.bin_location = bin_location
 
         # Periodic update for trajectory generation
         self._state_update_event = self.DeclarePeriodicUnrestrictedUpdateEvent(self.time_step, 0.0, self.UpdateTrajectory)
@@ -99,8 +100,9 @@ class Navigator(LeafSystem):
         self.inflate_obstacles = True
         self.allow_unknown_pathing = True
         self.goal_object_location = None
-        self.max_rotation_degrees = 8
+        self.max_rotation_degrees = 10
         self.grid_map = np.zeros((100, 100))
+        self.hijacked_goal = None
 
     def connect_mapper(self, point_cloud_mapper, station: Diagram, builder: DiagramBuilder):
         builder.Connect(point_cloud_mapper.get_output_port(0), self.get_input_port(self._grid_map_input_index)) # Output grid_map from mapper to input grid_map of planner
@@ -140,6 +142,7 @@ class Navigator(LeafSystem):
             if not previous_navigator_state:
                 # Set the goal when navigator_state goes from 0 to non-zero
                 # print("RISING EDGE: Setting new goal")
+                self.iters_at_current_waypoint = 0
                 self.goal = self.EvalVectorInput(context, self._goal_input_index).get_value().copy()
                 # print("Received New goal: ({:.3f}, {:.3f}, {:.3f})".format(*self.goal))
 
@@ -147,7 +150,10 @@ class Navigator(LeafSystem):
                     add_sphere_to_meshcat_xy_plane(self.meshcat, "goal_original", self.goal, radius=0.05, rgba=[0, 0, 1, 1])
 
                 if navigator_state == NavigationState.MOVE_NEAR_OBJECT.value:
-                    approach_distance = 0.85  # Distance to stop before the object (in meters)
+                    if np.allclose(self.goal,self.bin_location, atol=0.01):
+                        approach_distance = 1
+                    else:
+                        approach_distance = 0.85  # Distance to stop before the object (in meters)
                     direction_vector = self.goal[:2] - current_position[:2]
                     distance_to_goal = np.linalg.norm(direction_vector)
                     if distance_to_goal > approach_distance:
@@ -176,14 +182,18 @@ class Navigator(LeafSystem):
 
                 # Check if we've reached the current waypoint
                 distance_to_waypoint = np.linalg.norm(current_waypoint[:2] - current_position[:2])
-                # if we are at the last waypoint, make sure we also match the heading and have more precision on the last point
-                angle_okay = abs((current_position[2] - current_waypoint[2])% (2*np.pi)) < np.radians(self.max_rotation_degrees) # about 10 degrees
+
+                # Normalize the angular difference to the range [-pi, pi]
+                angle_difference = (current_position[2] - current_waypoint[2] + np.pi) % (2 * np.pi) - np.pi
+                angle_okay = abs(angle_difference) < np.radians(self.max_rotation_degrees)  # about 10 degrees
+
                 threshold = 0.1
                 # iteratively check nodes, since we might satisfy multiple conditions of sequential nodes
                 while distance_to_waypoint < threshold and angle_okay:  # 10cm threshold
 
                     if self.current_waypoint_idx == len(self.waypoints) - 1:
-                        angle_okay = abs(current_position[2] - current_waypoint[2]) < 0.2 # about 10 degrees
+                        angle_difference = (current_position[2] - current_waypoint[2] + np.pi) % (2 * np.pi) - np.pi
+                        angle_okay = abs(angle_difference) < np.radians(self.max_rotation_degrees)  # about 10 degrees
                         threshold = 0.1
                         if not (distance_to_waypoint < threshold and angle_okay):
                             # if we haven't satisfied the stricter conditions of the last node, break
@@ -193,25 +203,35 @@ class Navigator(LeafSystem):
                     self.current_waypoint_idx += 1
                     self.iters_at_current_waypoint = 0
                     if self.current_waypoint_idx >= len(self.waypoints):
-                        # print("Reached final waypoint, DONE ASTAR")
-                        state.get_mutable_discrete_state(self._navigation_complete).set_value([1])
+                        print("Reached final waypoint, DONE ASTAR")
+                        if self.hijacked_goal is None:
+                            state.get_mutable_discrete_state(self._navigation_complete).set_value([1])
                         self.waypoints = None
                         self.current_waypoint_idx = 0
                         break
                     else:
                         current_waypoint = self.waypoints[self.current_waypoint_idx]
                         distance_to_waypoint = np.linalg.norm(current_waypoint[:2] - current_position[:2])
-                        angle_okay = abs((current_position[2] - current_waypoint[2])% (2*np.pi)) < np.radians(self.max_rotation_degrees) # about 10 degrees
+                        angle_difference = (current_position[2] - current_waypoint[2] + np.pi) % (2 * np.pi) - np.pi
+                        angle_okay = abs(angle_difference) < np.radians(self.max_rotation_degrees)  # about 10 degrees
                         # update the map
 
                 # Follow existing trajectory
                 desired_position = current_waypoint
             # also need this iters check to see if we're stuck, then replan
-            elif self.waypoints is None or self.iters_at_current_waypoint >= self.max_iters_at_current_waypoint:
+            elif self.iters_at_current_waypoint >= self.max_iters_at_current_waypoint:
+                self.hijacked_goal = self.goal
+                print("Stuck at waypoint. Replanning.")
+                # use the gridmap and select nodes that are not occupied and are completely free, move there while maintaining same robot pose
+                new_waypoints = self.find_nearest_free_space_with_heading(current_position, self.grid_map)
+                self.waypoints = new_waypoints
+                self.current_waypoint_idx = 0
+
+            elif self.waypoints is None:
                 self.iters_at_current_waypoint = 0
                 # print("Generating new A* path to:", self.goal)
                 # Calculate new A* path
-
+                self.hijacked_goal = None
                 self.grid_map = self.EvalAbstractInput(context, self._grid_map_input_index).get_value()
                 self.grid_size = self.grid_map.shape
                 self.grid_center_index = self.grid_size[0] // 2
@@ -347,6 +367,54 @@ class Navigator(LeafSystem):
 
         state.get_mutable_discrete_state(self._spot_commanded_position).SetFromVector(self.spot_commanded_position)
         state.get_mutable_discrete_state(self._previous_navigator_state).set_value([navigator_state])
+
+    def find_nearest_free_space_with_heading(self, current_position, grid_map):
+        """
+        Find a free space away from the nearest object while maintaining the same heading.
+
+        Args:
+            current_position (np.ndarray): Current position of the robot [x, y, theta].
+            grid_map (np.ndarray): 2D array representing the grid map (0 for free, >0 for occupied).
+
+        Returns:
+            np.ndarray: Waypoints moving away from obstacles while maintaining heading.
+        """
+        # Apply binary erosion to ensure the robot fits in the free space
+        robot_clearance = int(max(self.robot_length, self.robot_width) / self.resolution)
+        eroded_grid = binary_erosion(grid_map == 0, structure=np.ones((robot_clearance, robot_clearance))).astype(int)
+
+        # Convert the current position to grid coordinates
+        cx, cy = convert_to_grid_coordinates(*current_position[:2], self.resolution, grid_map.shape)
+
+        # Find the nearest occupied cell
+        nearest_obstacle = None
+        min_dist = float('inf')
+
+        for x in range(grid_map.shape[0]):
+            for y in range(grid_map.shape[1]):
+                if not eroded_grid[x, y] and grid_map[x, y] > 0:  # Check if the cell is occupied
+                    dist = np.linalg.norm(np.array([cx, cy]) - np.array([x, y]))
+                    if dist < min_dist:
+                        min_dist = dist
+                        nearest_obstacle = np.array([x, y])
+
+        if nearest_obstacle is not None:
+            # Calculate a direction away from the obstacle
+            obstacle_world = self.grid_to_world(nearest_obstacle, grid_map.shape)
+            current_world = current_position[:2]
+            direction = current_world - obstacle_world
+            direction /= np.linalg.norm(direction)  # Normalize
+
+            # Create waypoints moving away in the same heading direction
+            waypoints = []
+            for i in range(1, 3):  # Create 3 waypoints at 0.1m intervals
+                new_position = current_world + direction * i * 0.1
+                waypoints.append([new_position[0], new_position[1], current_position[2]])
+
+            return np.array(waypoints)
+
+        print("No nearby obstacles to avoid. Staying in place.")
+        return np.array([[current_position[0], current_position[1], current_position[2]]])
 
     def generate_smooth_headings(self, selected_points, headings):
         """

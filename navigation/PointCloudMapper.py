@@ -55,6 +55,10 @@ class PointCloudMapper(LeafSystem):
         self.robot_width = robot_width
         self.frontier_strategy = "closest"
         self.mark_robot_footprint_as_free()
+        self.bin_location = bin_location
+        self.bin_size = bin_size
+        self.mark_bin_as_obstacle()
+
 
     def CalcObjectClusters(self, context: Context, output: AbstractValue):
         # Set the output to the current object clusters
@@ -84,8 +88,10 @@ class PointCloudMapper(LeafSystem):
             ox, oy = self.object_pointcloud_to_grid(valid_object_points)  # Convert to grid (objects only)
             self.grid_map = self.update_grid_map(self.grid_map, ox, oy, [], [], value=2)  # Mark objects with value 2
 
+        self.mark_bin_as_obstacle()
         if VISUALIZE_GRID_MAP:
             self.visualize_grid_map()  # Visualize the grid map
+
         self.cluster_objects()  # Cluster objects in the grid map
         # print(f"Object clusters: {self.object_clusters}")
 
@@ -230,10 +236,6 @@ class PointCloudMapper(LeafSystem):
             cluster_indices = np.argwhere(labeled_grid == i)
             grid_points = cluster_indices.tolist()
 
-            # TODO: Add this in if we are getting incorrect pointclouds
-            # if len(grid_points) < 2:
-            #     # not enough points to register as an object?
-            #     continue
 
             # Calculate a good centroid that is part of the cluster
             centroid_index = len(cluster_indices) // 2  # Take the middle point in the sorted list as a centroid
@@ -328,6 +330,31 @@ class PointCloudMapper(LeafSystem):
     def pick_random_frontier(self, frontiers: List[Tuple[int, int]]) -> Tuple[int, int]:
         random_frontier = frontiers[np.random.randint(0, len(frontiers))]
         return random_frontier
+
+    def mark_bin_as_obstacle(self):
+        """
+        Marks the entire rectangular area of a bin as an obstacle in the grid map.
+
+        bin_location: Tuple[float, float] - Center of the bin in world coordinates (x, y).
+        bin_size: Tuple[float, float] - Size of the bin in meters (width, length).
+        """
+        bin_center_x, bin_center_y = self.bin_location[:2]
+        bin_width, bin_length = self.bin_size
+
+        # Convert bin dimensions to grid coordinates
+        half_width_cells = int((bin_width / 2) / self.resolution)
+        half_length_cells = int((bin_length / 2) / self.resolution)
+
+        # Convert bin center to grid coordinates
+        bin_center_grid_x, bin_center_grid_y = convert_to_grid_coordinates(bin_center_x, bin_center_y, self.resolution, self.grid_map.shape)
+
+        # Mark cells within the bin dimensions as obstacles
+        for dx in range(-half_width_cells, half_width_cells + 1):
+            for dy in range(-half_length_cells, half_length_cells + 1):
+                x = bin_center_grid_x + dx
+                y = bin_center_grid_y + dy
+                if 0 <= x < self.grid_map.shape[0] and 0 <= y < self.grid_map.shape[1]:
+                    self.grid_map[x, y] = 1  # Mark as obstacle
 
     def visualize_grid_map(self):
         """
