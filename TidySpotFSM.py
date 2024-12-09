@@ -59,6 +59,7 @@ class TidySpotFSM(LeafSystem):
         self.DeclareVectorOutputPort("current_object_location", 2, self.SetCurrentObjectLocation)
         self._path_planning_goal_output = self.DeclareVectorOutputPort("path_planning_goal", 3, self.SetPathPlanningGoal).get_index()
         self._path_planning_position_output = self.DeclareVectorOutputPort("path_planning_position", 3, self.SetPathPlanningCurrentPosition).get_index()
+        # self._object_cluster_output = self.DeclareStateOutputPort("object_cluster_attempted", 2).get_index()
 
 
         # Output ports for various components
@@ -67,6 +68,8 @@ class TidySpotFSM(LeafSystem):
 
         self.DeclareInitializationUnrestrictedUpdateEvent(self._initialize_state)
         self.DeclarePeriodicUnrestrictedUpdateEvent(0.1, 0.0, self.Update)
+        self.object_clusters = None
+        self.attempted_clusters = set()
 
     def connect_components(self, builder, object_detector, grasp_selector, spot_arm_ik_controller, point_cloud_mapper, navigator, station):
         builder.Connect(station.GetOutputPort("spot.state_estimated"), self.get_input_port(self._spot_body_state_index))
@@ -85,6 +88,7 @@ class TidySpotFSM(LeafSystem):
         # connect the mappers frontier to the FSM
         builder.Connect(point_cloud_mapper.GetOutputPort("frontier"), self.GetInputPort("frontier"))
         builder.Connect(point_cloud_mapper.GetOutputPort("grid_map"), self.GetInputPort("grid_map")) # Output grid_map from mapper to input grid_map of planner
+        # builder.Connect(self.get_output_port(self._object_cluster_output), point_cloud_mapper.GetInputPort("object_cluster_attempted"),) # TODO: Check that output name is correct
 
         # Connect GraspSelector to the FSM
         builder.Connect(self.GetOutputPort("current_object_location"), grasp_selector.GetInputPort("current_object_location"))
@@ -112,6 +116,22 @@ class TidySpotFSM(LeafSystem):
         controller_complete = self.GetInputPort("controller_complete").Eval(context)[0]
         return controller_complete and do_arm_controller_mission
 
+    # def _mark_object_cluster_as_grasped(self, context, state, object_cluster_centroid):
+    #     # Mark the object cluster as grasped
+    #     state.get_mutable_discrete_state(self._object_cluster_output).set_value(object_cluster_centroid)
+
+    def select_object_cluster(self):
+        # Select an object cluster to grasp
+        # from the object_clusters, select one we haven't attempted to grasp yet
+        for cluster_id, cluster in self.object_clusters.items():
+            if cluster_id not in self.attempted_clusters:
+                self.attempted_clusters.add(cluster_id)
+                return cluster.values()
+        else:
+            # return the first cluster if we've attempted all of them
+            cluster_id, cluster = next(iter(self.object_clusters.items()))
+            return cluster.values()
+
     def Update(self, context, state):
         current_state = context.get_abstract_state(int(self._state_index)).get_value()
         self.robot_state = self.get_spot_state_input_port().Eval(context)
@@ -131,7 +151,7 @@ class TidySpotFSM(LeafSystem):
 
             # From IDLE we can either explore, or if we already know there are objects we can approach them
             if self.check_detections():
-                grid_points, centroid, _ = self.object_clusters.values() # if object_clusters exists, there will always be one with key value 1
+                grid_points, centroid, _ = self.select_object_cluster()
                 print(f"Found object at {centroid['world']}, approaching ...")
 
                 self.current_object_location = centroid["world"]
@@ -155,7 +175,7 @@ class TidySpotFSM(LeafSystem):
                 print("ASTAR DONE RECEIVED: Exploration completed to area.")
 
                 if self.check_detections():
-                    grid_points, centroid, _ = self.object_clusters.values() # if object_clusters exists, there will always be one with key value 1
+                    grid_points, centroid, _ = self.select_object_cluster()
                     print(f"Found object at {centroid['world']}, approaching ...")
 
                     self.current_object_location = centroid["world"]
@@ -182,6 +202,7 @@ class TidySpotFSM(LeafSystem):
                 print("Arrived at grasp location, ready to pick object at ", self.current_object_location)
 
                 # Send the grasp request to the arm controller
+                # self._mark_object_cluster_as_grasped(context, state, self.current_object_location[1])
                 self.grasp_object(state)
                 print("Grasp requested.")
 

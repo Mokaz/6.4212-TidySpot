@@ -34,6 +34,7 @@ class PointCloudMapper(LeafSystem):
         self.meshcat = meshcat
 
         self.DeclareVectorInputPort("spot.state_estimated",20)
+        # self.DeclareVectorInputPort("object_cluster_attempted", 2, self.MarkObjectClusterAsAttempted)
         # Input ports
         self._point_cloud_inputs = {
             point_cloud_name: self.DeclareAbstractInputPort(f"{point_cloud_name}.point_cloud", AbstractValue.Make(PointCloud())) for point_cloud_name in camera_names
@@ -59,17 +60,26 @@ class PointCloudMapper(LeafSystem):
         self.bin_size = bin_size
         self.mark_bin_as_obstacle()
 
+    def MarkObjectClusterAsAttempted(self, context: Context, input: AbstractValue):
+        cluster_centroid = input.get_value()[0]
+        # loop through the object clusters and find the one that matches the world centroid
+        # TODO: instead of this, use the id
+        for cluster_id, cluster in self.object_clusters.items():
+            if cluster["centroid"]["world"] == cluster_centroid:
+                cluster["attempted_grasp"] = True
+                break
+
 
     def CalcObjectClusters(self, context: Context, output: AbstractValue):
         # Set the output to the current object clusters
         # instead of returning them all, we will return one that hasn't been grasp attempted
-        for cluster_id, cluster in self.object_clusters.items():
-            if not cluster["attempted_grasp"]:
-                cluster["attempted_grasp"] = True
-                output.set_value(cluster)
-                return
+        output.set_value(self.object_clusters)
+        # for cluster_id, cluster in self.object_clusters.items():
+        #     if not cluster["attempted_grasp"]:
+        #         output.set_value(cluster)
+        #         return
 
-        output.set_value(self.object_clusters.get(1, {}))
+        # output.set_value(self.object_clusters.get(1, {}))
 
     def CalcGridMap(self, context: Context, output: AbstractValue):
         self.robot_state = self.GetInputPort("spot.state_estimated").Eval(context)
@@ -252,8 +262,9 @@ class PointCloudMapper(LeafSystem):
             centroid_y = (centroid_grid[1] - (self.grid_map.shape[1] // 2)) * self.resolution
 
             # Add the cluster to the dictionary if it is not already present
-            if i not in self.object_clusters:
-                self.object_clusters[i] = {
+            id = f"{centroid_x}_{centroid_y}"
+            if id not in self.object_clusters:
+                self.object_clusters[id] = {
                     "grid_points": grid_points,
                     "centroid": {
                         "grid": centroid_grid.tolist(),
