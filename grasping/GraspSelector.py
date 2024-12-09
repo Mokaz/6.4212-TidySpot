@@ -72,6 +72,7 @@ class GraspSelector(LeafSystem):
             colors = None
 
         points = points[valid_mask]
+        max_z = np.max(points[:, 2])
 
         if points.shape[0] == 0:
             print("SelectGrasp: No points in the specified limits.")
@@ -100,7 +101,12 @@ class GraspSelector(LeafSystem):
                 self.visualize_pcd_with_grasps(points, colors, gg)
                 self.visualize_pcd_with_single_grasp(points, gg[0], colors)
 
-            g_best = RigidTransform(RotationMatrix(gg[0].rotation_matrix).multiply(RotationMatrix.MakeXRotation(-np.pi/2)), gg[0].translation)
+            g_best = gg[0]
+            
+            if g_best.translation[2] < max_z - 0.05:
+                g_best.translation[2] = max_z - 0.05
+
+            g_best = RigidTransform(RotationMatrix(g_best.rotation_matrix).multiply(RotationMatrix.MakeXRotation(-np.pi/2)), g_best.translation)
             output.set_value(g_best)
         else: # Antipodal
             g_best = self.grasp_handler.run_grasp(point_cloud, context, visualize=False)
