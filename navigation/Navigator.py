@@ -242,7 +242,7 @@ class Navigator(LeafSystem):
                         grid_map = np.where(self.grid_map == -1, 0, self.grid_map)  # Replace -1 with 0
 
                     # Inflate obstacles in the grid map
-                    grid_map = binary_dilation(grid_map, iterations=2) # the robot is 1.1m long and 0.5m wide, if we do 2 iterations, obstacles expand to 0.4 around. hopefully this is enough
+                    grid_map = binary_dilation(grid_map, iterations=3) # the robot is 1.1m long and 0.5m wide, if we do 2 iterations, obstacles expand to 0.4 around. hopefully this is enough
 
                 # Use A* to find the path
                 self.goal[:2] = self.check_unoccupied(self.goal[:2], self.grid_map)
@@ -408,9 +408,12 @@ class Navigator(LeafSystem):
 
             # Create waypoints moving away in the same heading direction
             waypoints = []
-            for i in range(1, 4):  # Create 3 waypoints at 0.1m intervals
+            for i in range(1, 6):  # Create 5 waypoints at 0.1m intervals
                 new_position = current_world + direction * i * 0.1
                 waypoints.append([new_position[0], new_position[1], current_position[2]])
+
+            if self.visualize and self.meshcat:
+                add_sphere_to_meshcat_xy_plane(self.meshcat, "stuck replan", waypoints[-1], radius=0.02, rgba=[0.5, 0, 1, 1])
 
             return np.array(waypoints)
 
